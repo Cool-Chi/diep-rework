@@ -1,14 +1,24 @@
-import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
+import {
+  BULLET_POOL_CAPACITY,
+  WORLD_HEIGHT,
+  WORLD_WIDTH,
+} from '../config/constants';
 import type { MinimalDebug } from '../debug/MinimalDebug';
+import { Bullet } from '../entities/Bullet';
 import { Tank } from '../entities/Tank';
 import { PhysicsWorld } from '../physics/PhysicsWorld';
 import { GridRenderer } from '../rendering/GridRenderer';
 import { Renderer } from '../rendering/Renderer';
 import { TankRenderer } from '../rendering/TankRenderer';
+import { CollisionSystem } from '../systems/CollisionSystem';
+import { FireSystem } from '../systems/FireSystem';
+import { ShapeSystem } from '../systems/ShapeSystem';
 import { Camera } from './Camera';
+import { EventBus } from './EventBus';
 import { FixedStepper } from './FixedStepper';
 import { GameLoop } from './GameLoop';
 import { InputManager } from './InputManager';
+import { ObjectPool } from './ObjectPool';
 
 /**
  * 遊戲主控制器（整合物理模擬、固定步長、渲染插值與相機）
@@ -19,12 +29,25 @@ export class Game {
   public readonly stepper = new FixedStepper();
   public readonly physics = new PhysicsWorld();
   public readonly inputManager = new InputManager();
+  public readonly eventBus = new EventBus();
 
+  // 實體與物件池
+  public readonly bulletPool = new ObjectPool<Bullet>(
+    BULLET_POOL_CAPACITY,
+    () => new Bullet(),
+  );
   public readonly playerTank = new Tank(
     1,
     WORLD_WIDTH * 0.5,
     WORLD_HEIGHT * 0.5,
   );
+
+  // 系統驅動器
+  public readonly fireSystem = new FireSystem();
+  public readonly shapeSystem = new ShapeSystem();
+  public readonly collisionSystem = new CollisionSystem();
+
+  // 渲染層
   public readonly gridRenderer = new GridRenderer();
   public readonly tankRenderer = new TankRenderer();
 
@@ -57,13 +80,16 @@ export class Game {
     // 4. 綁定玩家輸入監聽
     this.inputManager.attach(this.renderer.app.canvas);
 
-    // 5. 若為開發環境，動態載入最小版 DebugOverlay
+    // 5. 初始化形狀生態至 500 個
+    this.shapeSystem.fillToTarget();
+
+    // 6. 若為開發環境，動態載入最小版 DebugOverlay
     if (import.meta.env.DEV) {
       const { MinimalDebug } = await import('../debug/MinimalDebug');
       this.debugOverlay = new MinimalDebug();
     }
 
-    // 6. 啟動主循環
+    // 7. 啟動主循環
     this.loop.start();
   }
 
@@ -81,17 +107,41 @@ export class Game {
   public update(dtSeconds: number): void {
     const stepResult = this.stepper.advance(dtSeconds);
 
-    // --- 固定步長物理模擬階段 ---
+    // --- 固定步長物理模擬階段 (25 TPS) ---
     for (let i = 0; i < stepResult.ticks; i++) {
       // (a) 取樣輸入寫入坦克 InputCommand
       this.inputManager.sample(this.playerTank.input, (sx, sy) =>
         this.camera.screenToWorld(sx, sy),
       );
 
-      // (b) 物理模擬積分（含 prepareStep 備份上一 tick 座標）
+      // (b) 裝填推進、開火生成子彈與後座力衝量
+      this.fireSystem.updateTankFiring(this.playerTank, this.bulletPool);
+
+      // (c) 坦克物理模擬積分（含 prepareStep 備份座標、移動加速度、阻尼與邊界約束）
       this.physics.stepTank(this.playerTank);
 
-      // (c) 記錄實際 TPS 頻率
+      // (d) 子彈步進推進與壽命衰減
+      this.fireSystem.updateBullets(this.bulletPool);
+
+      // (e) 形狀生態漂移、阻尼與動態補足
+      const visibleBounds = this.camera.getVisibleBounds();
+      this.shapeSystem.update([
+        visibleBounds.minX,
+        visibleBounds.minY,
+        visibleBounds.maxX,
+        visibleBounds.maxY,
+      ]);
+
+      // (f) 碰撞檢測與物理結算 (SpatialHash + Swept + 扣血)
+      this.collisionSystem.update(
+        [this.playerTank],
+        this.bulletPool,
+        this.shapeSystem.shapes,
+        this.shapeSystem,
+        this.eventBus,
+      );
+
+      // (g) 記錄實際 TPS 頻率
       if (this.debugOverlay) {
         this.debugOverlay.recordTick();
       }

@@ -10,6 +10,8 @@ export class InputManager {
   private keyA = false;
   private keyS = false;
   private keyD = false;
+  private keySpace = false;
+  private autoFire = false;
 
   public mouseScreenX = 0;
   public mouseScreenY = 0;
@@ -85,6 +87,13 @@ export class InputManager {
       case 'ArrowRight':
         this.keyD = true;
         break;
+      case 'Space':
+        this.keySpace = true;
+        e.preventDefault();
+        break;
+      case 'KeyE':
+        this.autoFire = !this.autoFire;
+        break;
     }
   }
 
@@ -106,6 +115,9 @@ export class InputManager {
       case 'ArrowRight':
         this.keyD = false;
         break;
+      case 'Space':
+        this.keySpace = false;
+        break;
     }
   }
 
@@ -118,6 +130,7 @@ export class InputManager {
     this.keyA = false;
     this.keyS = false;
     this.keyD = false;
+    this.keySpace = false;
     this.isMouseDown = false;
   }
 
@@ -156,7 +169,7 @@ export class InputManager {
 
     target.moveX = mx;
     target.moveY = my;
-    target.shooting = this.isMouseDown;
+    target.shooting = this.isMouseDown || this.keySpace || this.autoFire;
 
     const worldPos = screenToWorld(this.mouseScreenX, this.mouseScreenY);
     target.aimX = worldPos.x;

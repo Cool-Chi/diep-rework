@@ -32,7 +32,9 @@ export class Tank {
   // 戰鬥屬性 (M2 基準)
   public hp = 50;
   public maxHp = 50;
-  public bodyDamage = 20; // 撞擊傷害基準 (p=0: (0+5)*4)
+  public bodyDamage = 20; // 撞擊傷害基準 (對形狀: (p=0: (0+5)*4))
+  public bodyDamageToTank = 30; // 撞擊傷害基準 (對坦克: (p=0: (0+5)*6))
+  public bodyDamageToBullet = 5; // 撞擊傷害基準 (對子彈: (p=0: p+5))
   public reloadCooldown = 0; // 當前剩餘裝填冷卻 tick 數
   public barrelCooldowns: Int32Array; // 各砲管獨立冷卻
 
@@ -61,6 +63,23 @@ export class Tank {
     this.prevY = startY;
     this.radius = radius;
     this.barrelCooldowns = new Int32Array(this.definition.barrels.length);
+  }
+
+  /**
+   * 重生並重置狀態
+   */
+  public respawn(x: number, y: number): void {
+    this.x = x;
+    this.y = y;
+    this.prevX = x;
+    this.prevY = y;
+    this.vx = 0;
+    this.vy = 0;
+    this.hp = this.maxHp;
+    this.active = true;
+    for (let b = 0; b < this.barrelCooldowns.length; b++) {
+      this.barrelCooldowns[b] = 0;
+    }
   }
 
   /**
