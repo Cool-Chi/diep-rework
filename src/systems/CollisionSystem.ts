@@ -25,6 +25,8 @@ import type { ShapeSystem } from './ShapeSystem';
  */
 export class CollisionSystem {
   public readonly spatialHash: SpatialHash;
+  public pushFactor = COLLISION_PUSH_FACTOR;
+  public knockbackFactor = BULLET_KNOCKBACK_FACTOR;
 
   constructor(spatialHash?: SpatialHash) {
     this.spatialHash = spatialHash ?? new SpatialHash();
@@ -127,7 +129,7 @@ export class CollisionSystem {
             const bspd = Math.sqrt(bdx * bdx + bdy * bdy);
             if (bspd > 0.0001) {
               const knockback =
-                (BULLET_KNOCKBACK_FACTOR * bullet.damage) / shape.radius;
+                (this.knockbackFactor * bullet.damage) / shape.radius;
               shape.vx += (bdx / bspd) * knockback;
               shape.vy += (bdy / bspd) * knockback;
             }
@@ -227,10 +229,10 @@ export class CollisionSystem {
           const invTotal = 1 / (mTank + mShape);
 
           // 質量反比推開
-          tank.x -= nx * overlap * (mShape * invTotal) * COLLISION_PUSH_FACTOR;
-          tank.y -= ny * overlap * (mShape * invTotal) * COLLISION_PUSH_FACTOR;
-          shape.x += nx * overlap * (mTank * invTotal) * COLLISION_PUSH_FACTOR;
-          shape.y += ny * overlap * (mTank * invTotal) * COLLISION_PUSH_FACTOR;
+          tank.x -= nx * overlap * (mShape * invTotal) * this.pushFactor;
+          tank.y -= ny * overlap * (mShape * invTotal) * this.pushFactor;
+          shape.x += nx * overlap * (mTank * invTotal) * this.pushFactor;
+          shape.y += ny * overlap * (mTank * invTotal) * this.pushFactor;
 
           // 彈性碰撞衝量
           const rvx = shape.vx - tank.vx;
@@ -311,10 +313,10 @@ export class CollisionSystem {
           const mB = shapeB.radius * shapeB.radius;
           const invTotal = 1 / (mA + mB);
 
-          shapeA.x -= nx * overlap * (mB * invTotal) * COLLISION_PUSH_FACTOR;
-          shapeA.y -= ny * overlap * (mB * invTotal) * COLLISION_PUSH_FACTOR;
-          shapeB.x += nx * overlap * (mA * invTotal) * COLLISION_PUSH_FACTOR;
-          shapeB.y += ny * overlap * (mA * invTotal) * COLLISION_PUSH_FACTOR;
+          shapeA.x -= nx * overlap * (mB * invTotal) * this.pushFactor;
+          shapeA.y -= ny * overlap * (mB * invTotal) * this.pushFactor;
+          shapeB.x += nx * overlap * (mA * invTotal) * this.pushFactor;
+          shapeB.y += ny * overlap * (mA * invTotal) * this.pushFactor;
 
           const rvx = shapeB.vx - shapeA.vx;
           const rvy = shapeB.vy - shapeA.vy;

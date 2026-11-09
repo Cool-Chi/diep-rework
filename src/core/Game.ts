@@ -3,12 +3,14 @@ import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config/constants';
-import type { MinimalDebug } from '../debug/MinimalDebug';
+import type { DebugOverlay } from '../debug/DebugOverlay';
 import { Bullet } from '../entities/Bullet';
 import { Tank } from '../entities/Tank';
 import { PhysicsWorld } from '../physics/PhysicsWorld';
+import { BulletRenderer } from '../rendering/BulletRenderer';
 import { GridRenderer } from '../rendering/GridRenderer';
 import { Renderer } from '../rendering/Renderer';
+import { ShapeRenderer } from '../rendering/ShapeRenderer';
 import { TankRenderer } from '../rendering/TankRenderer';
 import { CollisionSystem } from '../systems/CollisionSystem';
 import { FireSystem } from '../systems/FireSystem';
@@ -49,10 +51,12 @@ export class Game {
 
   // 渲染層
   public readonly gridRenderer = new GridRenderer();
+  public readonly shapeRenderer = new ShapeRenderer();
+  public readonly bulletRenderer = new BulletRenderer();
   public readonly tankRenderer = new TankRenderer();
 
   private loop: GameLoop;
-  private debugOverlay: MinimalDebug | null = null;
+  private debugOverlay: DebugOverlay | null = null;
   private onResizeBound: () => void;
 
   constructor() {
@@ -74,7 +78,12 @@ export class Game {
 
     // 3. 建立場景圖層 (WorldContainer)
     this.gridRenderer.init(this.renderer.app);
+    this.shapeRenderer.init(this.renderer);
+    this.bulletRenderer.init(this.renderer);
+
     this.renderer.worldContainer.addChild(this.gridRenderer.container);
+    this.renderer.worldContainer.addChild(this.shapeRenderer.container);
+    this.renderer.worldContainer.addChild(this.bulletRenderer.container);
     this.renderer.worldContainer.addChild(this.tankRenderer.container);
 
     // 4. 綁定玩家輸入監聽
@@ -83,10 +92,10 @@ export class Game {
     // 5. 初始化形狀生態至 500 個
     this.shapeSystem.fillToTarget();
 
-    // 6. 若為開發環境，動態載入最小版 DebugOverlay
+    // 6. 若為開發環境，動態載入 DebugOverlay
     if (import.meta.env.DEV) {
-      const { MinimalDebug } = await import('../debug/MinimalDebug');
-      this.debugOverlay = new MinimalDebug();
+      const { DebugOverlay } = await import('../debug/DebugOverlay');
+      this.debugOverlay = new DebugOverlay(this);
     }
 
     // 7. 啟動主循環
@@ -109,6 +118,8 @@ export class Game {
 
     // --- 固定步長物理模擬階段 (25 TPS) ---
     for (let i = 0; i < stepResult.ticks; i++) {
+      const tickStart = performance.now();
+
       // (a) 取樣輸入寫入坦克 InputCommand
       this.inputManager.sample(this.playerTank.input, (sx, sy) =>
         this.camera.screenToWorld(sx, sy),
@@ -141,14 +152,17 @@ export class Game {
         this.eventBus,
       );
 
-      // (g) 記錄實際 TPS 頻率
+      const tickDuration = performance.now() - tickStart;
+
+      // (g) 記錄實際 TPS 頻率與耗時
       if (this.debugOverlay) {
-        this.debugOverlay.recordTick();
+        this.debugOverlay.recordTick(tickDuration);
       }
     }
 
     // --- 渲染插值與表現階段 ---
     const alpha = stepResult.alpha;
+    const visibleBounds = this.camera.getVisibleBounds();
 
     // 計算坦克插值顯示位置：renderPos = prevPos + (curPos - prevPos) * alpha
     const renderX =
@@ -165,22 +179,19 @@ export class Game {
     );
     const aimAngle = Math.atan2(mouseWorld.y - renderY, mouseWorld.x - renderX);
 
-    // 更新坦克繪製位置與砲管朝向
+    // 更新各圖層渲染對象
     this.tankRenderer.update(renderX, renderY, aimAngle);
+    this.shapeRenderer.update(this.shapeSystem.shapes, alpha, visibleBounds);
+    this.bulletRenderer.update(this.bulletPool, alpha, visibleBounds);
 
     // 相機平滑跟隨坦克插值位置
     this.camera.setTarget(renderX, renderY);
     this.camera.update(dtSeconds);
     this.renderer.updateCamera(this.camera);
 
-    // 更新除錯數值面板
+    // 更新除錯面板指標
     if (this.debugOverlay) {
-      this.debugOverlay.update(
-        this.playerTank.x,
-        this.playerTank.y,
-        this.playerTank.vx,
-        this.playerTank.vy,
-      );
+      this.debugOverlay.update();
     }
   }
 
@@ -189,6 +200,8 @@ export class Game {
     window.removeEventListener('resize', this.onResizeBound);
     this.inputManager.detach();
     this.gridRenderer.destroy();
+    this.shapeRenderer.destroy();
+    this.bulletRenderer.destroy();
     this.tankRenderer.destroy();
     this.renderer.destroy();
     this.debugOverlay?.destroy();

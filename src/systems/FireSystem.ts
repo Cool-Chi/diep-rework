@@ -21,6 +21,9 @@ import type { Tank } from '../entities/Tank';
  * 負責裝填冷卻推進、依據 BarrelConfig 發射子彈、後座力衝量施加與子彈生命週期維護
  */
 export class FireSystem {
+  public bulletSpeed = BASE_BULLET_SPEED;
+  public recoilImpulse = BASE_RECOIL_IMPULSE;
+
   /**
    * 每個模擬 tick 更新指定坦克的開火邏輯
    * @param tank 坦克實體
@@ -82,7 +85,7 @@ export class FireSystem {
           const tipY = mountY + barrel.length * Math.sin(totalAngle);
 
           // 計算子彈初速
-          const speed = BASE_BULLET_SPEED * barrel.bulletSpeedMultiplier;
+          const speed = this.bulletSpeed * barrel.bulletSpeedMultiplier;
           const vx =
             Math.cos(fireAngle) * speed +
             tank.vx * BULLET_INHERIT_TANK_VELOCITY;
@@ -115,7 +118,7 @@ export class FireSystem {
             );
 
             // 施加反方向後座力衝量
-            const recoil = BASE_RECOIL_IMPULSE * barrel.recoilMultiplier;
+            const recoil = this.recoilImpulse * barrel.recoilMultiplier;
             tank.vx -= Math.cos(fireAngle) * recoil;
             tank.vy -= Math.sin(fireAngle) * recoil;
 
