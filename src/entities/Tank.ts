@@ -1,4 +1,8 @@
 import { BASE_TANK_RADIUS } from '../config/constants';
+import {
+  BASIC_TANK_DEFINITION,
+  type TankDefinition,
+} from '../config/tanks.config';
 
 export interface InputCommand {
   moveX: number;
@@ -25,6 +29,16 @@ export class Tank {
   public radius: number;
   public rotation = 0; // 砲管/本體朝向（弧度）
 
+  // 戰鬥屬性 (M2 基準)
+  public hp = 50;
+  public maxHp = 50;
+  public bodyDamage = 20; // 撞擊傷害基準 (p=0: (0+5)*4)
+  public reloadCooldown = 0; // 當前剩餘裝填冷卻 tick 數
+  public barrelCooldowns: Int32Array; // 各砲管獨立冷卻
+
+  // 坦克定義 (M2 僅 Basic Tank)
+  public definition: TankDefinition = BASIC_TANK_DEFINITION;
+
   // 預先配置、重複使用的 InputCommand 物件，供 InputManager (玩家) 或 AISystem (AI) 寫入
   public readonly input: InputCommand = {
     moveX: 0,
@@ -46,6 +60,7 @@ export class Tank {
     this.prevX = startX;
     this.prevY = startY;
     this.radius = radius;
+    this.barrelCooldowns = new Int32Array(this.definition.barrels.length);
   }
 
   /**
