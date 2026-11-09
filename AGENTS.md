@@ -135,3 +135,38 @@
   - 型別檢查：`npm run typecheck`（`tsc --noEmit`）
   - 程式碼檢查：`npm run lint`（`biome check`）
   - 單元測試：`npm test`
+
+---
+
+## 7. Git 提交規範 (Git Commit Standards)
+
+所有提交必須嚴格遵守 **Conventional Commits 1.0** 格式：`<type>(<scope>): <description>`。
+
+1. **Commit 格式結構**：
+   - 格式：`<type>(<scope>): <description>`
+   - 可選的 body：每行不超過 72 字元，說明具體變更內容與原因。
+   - 可選的 footer：以 `Refs: M2` 或 `Refs: PLAN.md M1` 格式標註對應之里程碑。
+2. **Type 允許清單（嚴格限定以下 9 種）**：
+   - `feat`：新功能或系統實作。
+   - `fix`：修復 Bug 或數值缺陷。
+   - `refactor`：程式碼重構（未新增功能或修復 Bug）。
+   - `perf`：效能優化（如降低 GC、批次渲染優化）。
+   - `test`：新增或修改測試案例。
+   - `docs`：文件變更（如 PLAN.md, AGENTS.md）。
+   - `build`：建置系統或依賴變更（如 package.json, vite.config.ts）。
+   - `chore`：輔助工具、例行維護或設定調整。
+   - `style`：程式碼風格或格式整理（不影響運行邏輯）。
+3. **Scope 建議清單**：
+   - 模組範圍：`core`、`physics`、`rendering`、`entities`、`systems`、`ui`、`ai`、`config`、`debug`、`tests`、`docs`。
+   - 跨模組或全專案層級變更可省略 scope。
+4. **Description 規範**：
+   - 使用英文（English）。
+   - 使用祈使句語氣（如 `add`, `fix`, `scaffold`, `refactor`）。
+   - 開頭小寫。
+   - 結尾不加句號。
+   - 標題長度不超過 72 字元。
+5. **里程碑與執行紀律**：
+   - 每個里程碑至少有 1 個 commit；可依邏輯拆成多個，但每個 commit 都必須能獨立通過 `npm run typecheck`、`npm test` 與 `npm run lint`。
+   - **禁止使用無 type 的提交訊息**（如禁止 `"M1: foundation"`）。
+   - **嚴禁私自 `git commit --amend` 或 force push 已回報給使用者的 commit**，除非使用者明確要求。
+   - **不得額外安裝套件**：不得為了檢查 commit 格式安裝 `commitlint` 或 `husky` 等工具（維持套件白名單不變）。
