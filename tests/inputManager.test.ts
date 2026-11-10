@@ -206,4 +206,41 @@ describe('InputManager (Robust keyup & focus loss handling)', () => {
     mockWindow.dispatchEvent(new MockKeyboardEvent('keydown', 'Digit8'));
     expect(upgrades).toEqual([0, 7]);
   });
+
+  it('isolates HUD interactions: pointerdown on UI does not fire, moving over UI does not interrupt firing', () => {
+    const mockWindow = new EventTarget();
+    const mockCanvas = new EventTarget() as HTMLCanvasElement;
+    // 定義 UI 範圍：x: 10~100, y: 10~100
+    const isOverUi = (x: number, y: number) =>
+      x >= 10 && x <= 100 && y >= 10 && y <= 100;
+
+    const input = new InputManager(mockWindow, null, isOverUi);
+    input.attach(mockCanvas);
+
+    const cmd = createCmd();
+
+    // 1. 在 UI 區域內按下滑鼠 -> 不進入射擊狀態
+    mockCanvas.dispatchEvent(new MockPointerEvent('pointerdown', 0, 50, 50));
+    input.sample(cmd, identityScreenToWorld);
+    expect(cmd.shooting).toBe(false);
+    expect(input.isMouseDown).toBe(false);
+
+    // 2. 在 UI 區域外按下滑鼠 -> 進入射擊狀態
+    mockCanvas.dispatchEvent(new MockPointerEvent('pointerdown', 0, 200, 200));
+    input.sample(cmd, identityScreenToWorld);
+    expect(cmd.shooting).toBe(true);
+    expect(input.isMouseDown).toBe(true);
+
+    // 3. 已經按住開火，游標移動到 UI 區域內部 -> 不得中斷射擊
+    mockWindow.dispatchEvent(new MockPointerEvent('pointermove', 0, 50, 50));
+    input.sample(cmd, identityScreenToWorld);
+    expect(cmd.shooting).toBe(true);
+    expect(input.isMouseDown).toBe(true);
+
+    // 4. 放開滑鼠 -> 結束射擊
+    mockWindow.dispatchEvent(new MockPointerEvent('pointerup', 0, 50, 50));
+    input.sample(cmd, identityScreenToWorld);
+    expect(cmd.shooting).toBe(false);
+    expect(input.isMouseDown).toBe(false);
+  });
 });

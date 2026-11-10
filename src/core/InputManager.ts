@@ -40,6 +40,9 @@ export class InputManager {
     'undefined'
       ? document
       : null,
+    public isOverUi:
+      | ((screenX: number, screenY: number) => boolean)
+      | null = null,
   ) {
     this.onKeyDownBound = (e) => this.handleKeyDown(e as KeyboardEvent);
     this.onKeyUpBound = (e) => this.handleKeyUp(e as KeyboardEvent);
@@ -260,6 +263,9 @@ export class InputManager {
 
   private handlePointerDown(e: PointerEvent): void {
     if (e.button === 0) {
+      if (this.isOverUi?.(e.clientX, e.clientY)) {
+        return;
+      }
       this.isMouseDown = true;
     }
   }

@@ -37,6 +37,12 @@ export class DebugOverlay {
   private avgRenderMs = 0;
   private maxRenderMs = 0;
 
+  // HUD 耗時統計（預先配置 50 容量環形緩衝區，熱路徑零配置）
+  private readonly hudDurations = new Float64Array(50);
+  private hudRingHead = 0;
+  private avgHudMs = 0;
+  private maxHudMs = 0;
+
   // 事件計數器
   private shapeDestroyedCount = 0;
   private tankDiedCount = 0;
@@ -96,6 +102,15 @@ export class DebugOverlay {
   }
 
   /**
+   * 每個渲染幀更新 HUD 介面渲染更新時間
+   * @param durationMs 該幀 HUD 更新耗時毫秒數
+   */
+  public recordHudDuration(durationMs: number): void {
+    this.hudDurations[this.hudRingHead] = durationMs;
+    this.hudRingHead = (this.hudRingHead + 1) % 50;
+  }
+
+  /**
    * 每個渲染幀更新顯示指標
    */
   public update(): void {
@@ -136,6 +151,17 @@ export class DebugOverlay {
       this.avgRenderMs = renderSum / 50;
       this.maxRenderMs = renderMax;
 
+      // 計算環形緩衝之平均與最大 HUD 耗時
+      let hudSum = 0;
+      let hudMax = 0;
+      for (let i = 0; i < 50; i++) {
+        const val = this.hudDurations[i];
+        hudSum += val;
+        if (val > hudMax) hudMax = val;
+      }
+      this.avgHudMs = hudSum / 50;
+      this.maxHudMs = hudMax;
+
       this.renderMetrics();
     }
   }
@@ -171,6 +197,8 @@ export class DebugOverlay {
       <div>FPS: <b>${this.currentFps}</b> | TPS: <b>${this.currentTps}</b> (target 25)</div>
       <div>Tick Duration: avg <b>${this.avgTickMs.toFixed(2)}ms</b> | max <b>${this.maxTickMs.toFixed(2)}ms</b></div>
       <div>Render Duration: avg <b>${this.avgRenderMs.toFixed(2)}ms</b> | max <b>${this.maxRenderMs.toFixed(2)}ms</b></div>
+      <div>HUD Duration: avg <b>${this.avgHudMs.toFixed(2)}ms</b> | max <b>${this.maxHudMs.toFixed(2)}ms</b></div>
+      <div>HealthBars Pool: <b>${this.game.hud.healthBars.activeCount}</b> / ${this.game.hud.healthBars.capacity} active</div>
       <div>Bullets: ${bulletAlert ? `<b style="color:#ff3333">${activeBullets} active / ${visibleBullets} visible [ALERT: INVISIBLE!]</b>` : `<b>${activeBullets}</b> active / <b>${visibleBullets}</b> visible`}</div>
       <div>Shapes: ${shapeAlert ? `<b style="color:#ff3333">${activeShapes} active / ${visibleShapes} visible [ALERT: INVISIBLE!]</b>` : `<b>${activeShapes}</b> active / <b>${visibleShapes}</b> visible`}</div>
       <div style="border-top:1px dashed rgba(255,255,255,0.15);margin:4px 0;padding-top:4px;">
@@ -403,6 +431,42 @@ export class DebugOverlay {
       this.renderMetrics();
     });
     btnContainer.appendChild(clearShapeBtn);
+
+    // 坦克扣 50% 生命按鈕 (用於測試受傷血條)
+    const dmgTankBtn = createBtn(
+      'Damage Tank 50%',
+      () => {
+        const tank = this.game.playerTank;
+        tank.hp = Math.max(1, Math.floor(tank.hp * 0.5));
+        tank.lastDamageTick = this.game.currentTick;
+        this.renderMetrics();
+      },
+      '#8c3b3b',
+    );
+    btnContainer.appendChild(dmgTankBtn);
+
+    // 視野內形狀扣血 50% 按鈕 (用於測試形狀血條)
+    const dmgShapesBtn = createBtn(
+      'Damage Shapes 50%',
+      () => {
+        const shapes = this.game.shapeSystem.shapes;
+        for (let i = 0; i < shapes.length; i++) {
+          if (shapes[i].active) {
+            shapes[i].hp = Math.max(1, Math.floor(shapes[i].maxHp * 0.5));
+          }
+        }
+        this.renderMetrics();
+      },
+      '#8c3b3b',
+    );
+    btnContainer.appendChild(dmgShapesBtn);
+
+    // 切換 HUD 顯示開關
+    const toggleHudBtn = createBtn('Toggle HUD', () => {
+      this.game.hud.visible = !this.game.hud.visible;
+      this.renderMetrics();
+    });
+    btnContainer.appendChild(toggleHudBtn);
 
     // 600 子彈壓力測試按鈕
     const stressBtn = createBtn(

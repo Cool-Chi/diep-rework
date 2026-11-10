@@ -5,6 +5,7 @@ type TankDiedHandler = (victimId: number, killerId?: number) => void;
 type LevelUpHandler = (tankId: number, level: number) => void;
 type StatPointsChangedHandler = (tankId: number, points: number) => void;
 type StatUpgradeRequestedHandler = (statIndex: number) => void;
+type ScoreChangedHandler = (tankId: number, score: number) => void;
 
 /**
  * 零配置型別安全事件匯流排
@@ -16,6 +17,7 @@ export class EventBus {
   private levelUpHandlers: LevelUpHandler[] = [];
   private statPointsChangedHandlers: StatPointsChangedHandler[] = [];
   private statUpgradeRequestedHandlers: StatUpgradeRequestedHandler[] = [];
+  private scoreChangedHandlers: ScoreChangedHandler[] = [];
 
   // 1. Shape Destroyed
   public onShapeDestroyed(handler: ShapeDestroyedHandler): void {
@@ -112,11 +114,31 @@ export class EventBus {
     }
   }
 
+  // 6. Score Changed
+  public onScoreChanged(handler: ScoreChangedHandler): void {
+    this.scoreChangedHandlers.push(handler);
+  }
+
+  public offScoreChanged(handler: ScoreChangedHandler): void {
+    const idx = this.scoreChangedHandlers.indexOf(handler);
+    if (idx !== -1) {
+      this.scoreChangedHandlers.splice(idx, 1);
+    }
+  }
+
+  public emitScoreChanged(tankId: number, score: number): void {
+    const len = this.scoreChangedHandlers.length;
+    for (let i = 0; i < len; i++) {
+      this.scoreChangedHandlers[i](tankId, score);
+    }
+  }
+
   public clear(): void {
     this.shapeDestroyedHandlers.length = 0;
     this.tankDiedHandlers.length = 0;
     this.levelUpHandlers.length = 0;
     this.statPointsChangedHandlers.length = 0;
     this.statUpgradeRequestedHandlers.length = 0;
+    this.scoreChangedHandlers.length = 0;
   }
 }

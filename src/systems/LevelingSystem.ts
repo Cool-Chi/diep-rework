@@ -86,6 +86,7 @@ export class LevelingSystem {
     if (delta <= 0 || !tank.active) return;
 
     tank.score += delta;
+    eventBus?.emitScoreChanged(tank.id, tank.score);
     const newLevel = levelForScore(tank.score);
 
     if (newLevel > tank.level) {
@@ -149,6 +150,7 @@ export class LevelingSystem {
   public resetTank(tank: Tank, eventBus?: EventBus): void {
     tank.resetStats();
     recomputeDerivedStats(tank);
+    eventBus?.emitScoreChanged(tank.id, tank.score);
     eventBus?.emitStatPointsChanged(tank.id, tank.statPoints);
   }
 }

@@ -18,6 +18,7 @@ import { FireSystem } from '../systems/FireSystem';
 import { LevelingSystem } from '../systems/LevelingSystem';
 import { RegenSystem } from '../systems/RegenSystem';
 import { ShapeSystem } from '../systems/ShapeSystem';
+import { HUD } from '../ui/HUD';
 import { Camera } from './Camera';
 import { EventBus } from './EventBus';
 import { FixedStepper } from './FixedStepper';
@@ -62,14 +63,18 @@ export class Game {
   public readonly shapeRenderer = new ShapeRenderer();
   public readonly bulletRenderer = new BulletRenderer();
   public readonly tankRenderer = new TankRenderer();
+  public readonly hud: HUD;
 
   private loop: GameLoop;
-  private debugOverlay: DebugOverlay | null = null;
+  private devOverlay: DebugOverlay | null = null;
   private onResizeBound: () => void;
 
   constructor() {
+    this.hud = new HUD(this.eventBus);
     this.levelingSystem = new LevelingSystem(this.eventBus, [this.playerTank]);
     this.inputManager.eventBus = this.eventBus;
+    this.inputManager.isOverUi = (x, y) => this.hud.isOverUi(x, y);
+
     this.eventBus.onStatUpgradeRequested((statIndex) => {
       this.levelingSystem.spendStatPoint(
         this.playerTank,
@@ -104,24 +109,37 @@ export class Game {
     this.renderer.worldContainer.addChild(this.bulletRenderer.container);
     this.renderer.worldContainer.addChild(this.tankRenderer.container);
 
-    // 4. 綁定玩家輸入監聽
-    this.inputManager.attach(this.renderer.app.canvas);
+    // 4. 掛載 HUD 介面層並設定初始佈局
+    this.renderer.hudContainer.addChild(this.hud.container);
+    this.hud.resize(window.innerWidth, window.innerHeight);
 
-    // 5. 初始化形狀生態至 500 個
+    // 5. 綁定玩家輸入監聽與 HUD 點擊事件
+    this.inputManager.attach(this.renderer.app.canvas);
+    this.renderer.app.canvas.addEventListener(
+      'pointerdown',
+      (e: PointerEvent) => {
+        if (e.button === 0) {
+          this.hud.handlePointerDown(e.clientX, e.clientY);
+        }
+      },
+    );
+
+    // 6. 初始化形狀生態至 500 個
     this.shapeSystem.fillToTarget();
 
-    // 6. 若為開發環境，動態載入 DebugOverlay
+    // 7. 若為開發環境，動態載入 DebugOverlay
     if (import.meta.env.DEV) {
       const { DebugOverlay } = await import('../debug/DebugOverlay');
-      this.debugOverlay = new DebugOverlay(this);
+      this.devOverlay = new DebugOverlay(this);
     }
 
-    // 7. 啟動主循環
+    // 8. 啟動主循環
     this.loop.start();
   }
 
   private handleResize(): void {
     this.camera.resize(window.innerWidth, window.innerHeight);
+    this.hud.resize(window.innerWidth, window.innerHeight);
   }
 
   /**
@@ -178,8 +196,8 @@ export class Game {
       const tickDuration = performance.now() - tickStart;
 
       // (h) 記錄實際 TPS 頻率與耗時
-      if (this.debugOverlay) {
-        this.debugOverlay.recordTick(tickDuration);
+      if (this.devOverlay) {
+        this.devOverlay.recordTick(tickDuration);
       }
     }
 
@@ -220,10 +238,23 @@ export class Game {
     this.camera.update(dtSeconds);
     this.renderer.updateCamera(this.camera);
 
+    // 更新 HUD 介面（含血條、分數條、屬性面板與小地圖）
+    const hudStartTime = performance.now();
+    this.hud.update(
+      this.playerTank,
+      [this.playerTank],
+      this.shapeSystem.shapes,
+      this.camera,
+      dtSeconds,
+      visibleBounds,
+    );
+    const hudDuration = performance.now() - hudStartTime;
+
     // 更新除錯面板指標
-    if (this.debugOverlay) {
-      this.debugOverlay.recordRenderDuration(renderDuration);
-      this.debugOverlay.update();
+    if (this.devOverlay) {
+      this.devOverlay.recordRenderDuration(renderDuration);
+      this.devOverlay.recordHudDuration(hudDuration);
+      this.devOverlay.update();
     }
   }
 
@@ -231,11 +262,12 @@ export class Game {
     this.loop.stop();
     window.removeEventListener('resize', this.onResizeBound);
     this.inputManager.detach();
+    this.hud.destroy();
     this.gridRenderer.destroy();
     this.shapeRenderer.destroy();
     this.bulletRenderer.destroy();
     this.tankRenderer.destroy();
     this.renderer.destroy();
-    this.debugOverlay?.destroy();
+    this.devOverlay?.destroy();
   }
 }
