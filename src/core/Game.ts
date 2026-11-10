@@ -90,6 +90,24 @@ export class Game {
       );
     });
 
+    // 監聽轉職請求與進化可用事件
+    this.eventBus.onClassUpgradeRequested((classId) => {
+      this.levelingSystem.evolveTank(this.playerTank, classId, this.eventBus);
+    });
+
+    this.eventBus.onClassChanged((tankId) => {
+      if (tankId === this.playerTank.id) {
+        this.tankRenderer.setDefinition(this.playerTank.definition);
+        this.camera.fovMultiplier = this.playerTank.definition.fovMultiplier;
+      }
+    });
+
+    this.eventBus.onEvolutionAvailable((tankId, candidates) => {
+      if (tankId === this.playerTank.id) {
+        this.hud.evolutionPanel.show(candidates);
+      }
+    });
+
     this.loop = new GameLoop(this.update.bind(this));
     this.onResizeBound = this.handleResize.bind(this);
   }
@@ -228,6 +246,7 @@ export class Game {
 
     // ③ Camera.update（使用插值後的坦克位置與視野縮放）
     this.camera.targetLevel = this.playerTank.level;
+    this.camera.fovMultiplier = this.playerTank.definition.fovMultiplier;
     this.camera.setTarget(renderX, renderY);
     this.camera.update(dtSeconds);
     const visibleBounds = this.camera.getVisibleBounds();

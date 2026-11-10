@@ -112,8 +112,32 @@ export class FireSystem {
             tank.vx -= Math.cos(fireAngle) * recoil;
             tank.vy -= Math.sin(fireAngle) * recoil;
 
-            // 重置該砲管冷卻
-            tank.barrelCooldowns[b] = reloadTicks;
+            // 計算該砲管的裝填時間並重置冷卻
+            const bReload = Math.max(
+              1,
+              Math.round(reloadTicks * barrel.reloadMultiplier),
+            );
+            tank.barrelCooldowns[b] = bReload;
+
+            // 若本砲管為基準砲管 (fireDelayRatio === 0)，為處於閒置的其他砲管注入相位偏移，保證完美交替開火
+            if (barrel.fireDelayRatio === 0) {
+              for (let ob = 0; ob < barrelCount; ob++) {
+                if (
+                  ob !== b &&
+                  barrels[ob].fireDelayRatio > 0 &&
+                  tank.barrelCooldowns[ob] <= 0
+                ) {
+                  const obReload = Math.max(
+                    1,
+                    Math.round(reloadTicks * barrels[ob].reloadMultiplier),
+                  );
+                  tank.barrelCooldowns[ob] = Math.max(
+                    1,
+                    Math.round(obReload * barrels[ob].fireDelayRatio),
+                  );
+                }
+              }
+            }
           }
         }
       }

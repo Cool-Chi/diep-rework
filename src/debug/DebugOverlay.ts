@@ -6,6 +6,7 @@ import {
   STAT_MAX_HEALTH,
   STAT_RELOAD,
 } from '../config/stats.config';
+import { TANKS_CONFIG, type TankClassId } from '../config/tanks.config';
 import type { Game } from '../core/Game';
 
 /**
@@ -204,6 +205,7 @@ export class DebugOverlay {
       <div style="border-top:1px dashed rgba(255,255,255,0.15);margin:4px 0;padding-top:4px;">
         Level: <b style="color:#ffff00">${tank.level}</b>/30 | Score: <b>${tank.score}</b> (next: <b>${nextScore}</b>)
       </div>
+      <div>Class: <b style="color:#00e5ff">${tank.definition.name}</b> (Tier ${tank.definition.tier})</div>
       <div>Unspent Points: <b style="color:#00ff88">${tank.statPoints}</b> | Stats [1~8]: <b style="color:#33ccff">${statsArr}</b></div>
       <div>HP: <b>${Math.ceil(tank.hp)}</b>/${tank.maxHp} | Reload: <b>${tank.reloadTicks}t</b> | BulletSpd: <b>${tank.bulletSpeed.toFixed(2)}</b></div>
       <div>BulletHP: <b>${tank.bulletHp}</b> | BulletDmg: <b>${tank.bulletDamage}</b> | Radius: <b>${tank.radius.toFixed(1)}</b> | FOV: <b>${fovVal}</b></div>
@@ -467,6 +469,47 @@ export class DebugOverlay {
       this.renderMetrics();
     });
     btnContainer.appendChild(toggleHudBtn);
+
+    // 觸發 Lv 15 轉職面板按鈕
+    const triggerEvoBtn = createBtn(
+      'Trigger Evolution Panel',
+      () => {
+        this.game.hud.evolutionPanel.show([
+          'twin',
+          'sniper',
+          'machine_gun',
+          'flank_guard',
+        ]);
+        this.renderMetrics();
+      },
+      '#2a6f97',
+    );
+    btnContainer.appendChild(triggerEvoBtn);
+
+    // 職業一鍵切換按鈕區 (Tier 1 & Tier 2)
+    const classList: TankClassId[] = [
+      'basic',
+      'twin',
+      'sniper',
+      'machine_gun',
+      'flank_guard',
+    ];
+    for (let c = 0; c < classList.length; c++) {
+      const cid = classList[c];
+      const btn = createBtn(
+        `Class: ${TANKS_CONFIG[cid].name}`,
+        () => {
+          this.game.levelingSystem.evolveTank(
+            this.game.playerTank,
+            cid,
+            this.game.eventBus,
+          );
+          this.renderMetrics();
+        },
+        '#3a5a40',
+      );
+      btnContainer.appendChild(btn);
+    }
 
     // 600 子彈壓力測試按鈕
     const stressBtn = createBtn(

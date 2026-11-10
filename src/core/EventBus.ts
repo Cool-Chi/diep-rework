@@ -1,3 +1,4 @@
+import type { TankClassId } from '../config/tanks.config';
 import type { ShapeType } from '../entities/Shape';
 
 type ShapeDestroyedHandler = (kind: ShapeType, killerId: number) => void;
@@ -6,6 +7,12 @@ type LevelUpHandler = (tankId: number, level: number) => void;
 type StatPointsChangedHandler = (tankId: number, points: number) => void;
 type StatUpgradeRequestedHandler = (statIndex: number) => void;
 type ScoreChangedHandler = (tankId: number, score: number) => void;
+type ClassUpgradeRequestedHandler = (classId: TankClassId) => void;
+type ClassChangedHandler = (tankId: number, classId: TankClassId) => void;
+type EvolutionAvailableHandler = (
+  tankId: number,
+  candidates: TankClassId[],
+) => void;
 
 /**
  * 零配置型別安全事件匯流排
@@ -18,6 +25,9 @@ export class EventBus {
   private statPointsChangedHandlers: StatPointsChangedHandler[] = [];
   private statUpgradeRequestedHandlers: StatUpgradeRequestedHandler[] = [];
   private scoreChangedHandlers: ScoreChangedHandler[] = [];
+  private classUpgradeRequestedHandlers: ClassUpgradeRequestedHandler[] = [];
+  private classChangedHandlers: ClassChangedHandler[] = [];
+  private evolutionAvailableHandlers: EvolutionAvailableHandler[] = [];
 
   // 1. Shape Destroyed
   public onShapeDestroyed(handler: ShapeDestroyedHandler): void {
@@ -133,6 +143,66 @@ export class EventBus {
     }
   }
 
+  // 7. Class Upgrade Requested
+  public onClassUpgradeRequested(handler: ClassUpgradeRequestedHandler): void {
+    this.classUpgradeRequestedHandlers.push(handler);
+  }
+
+  public offClassUpgradeRequested(handler: ClassUpgradeRequestedHandler): void {
+    const idx = this.classUpgradeRequestedHandlers.indexOf(handler);
+    if (idx !== -1) {
+      this.classUpgradeRequestedHandlers.splice(idx, 1);
+    }
+  }
+
+  public emitClassUpgradeRequested(classId: TankClassId): void {
+    const len = this.classUpgradeRequestedHandlers.length;
+    for (let i = 0; i < len; i++) {
+      this.classUpgradeRequestedHandlers[i](classId);
+    }
+  }
+
+  // 8. Class Changed
+  public onClassChanged(handler: ClassChangedHandler): void {
+    this.classChangedHandlers.push(handler);
+  }
+
+  public offClassChanged(handler: ClassChangedHandler): void {
+    const idx = this.classChangedHandlers.indexOf(handler);
+    if (idx !== -1) {
+      this.classChangedHandlers.splice(idx, 1);
+    }
+  }
+
+  public emitClassChanged(tankId: number, classId: TankClassId): void {
+    const len = this.classChangedHandlers.length;
+    for (let i = 0; i < len; i++) {
+      this.classChangedHandlers[i](tankId, classId);
+    }
+  }
+
+  // 9. Evolution Available
+  public onEvolutionAvailable(handler: EvolutionAvailableHandler): void {
+    this.evolutionAvailableHandlers.push(handler);
+  }
+
+  public offEvolutionAvailable(handler: EvolutionAvailableHandler): void {
+    const idx = this.evolutionAvailableHandlers.indexOf(handler);
+    if (idx !== -1) {
+      this.evolutionAvailableHandlers.splice(idx, 1);
+    }
+  }
+
+  public emitEvolutionAvailable(
+    tankId: number,
+    candidates: TankClassId[],
+  ): void {
+    const len = this.evolutionAvailableHandlers.length;
+    for (let i = 0; i < len; i++) {
+      this.evolutionAvailableHandlers[i](tankId, candidates);
+    }
+  }
+
   public clear(): void {
     this.shapeDestroyedHandlers.length = 0;
     this.tankDiedHandlers.length = 0;
@@ -140,5 +210,8 @@ export class EventBus {
     this.statPointsChangedHandlers.length = 0;
     this.statUpgradeRequestedHandlers.length = 0;
     this.scoreChangedHandlers.length = 0;
+    this.classUpgradeRequestedHandlers.length = 0;
+    this.classChangedHandlers.length = 0;
+    this.evolutionAvailableHandlers.length = 0;
   }
 }

@@ -1,6 +1,11 @@
 import { KILL_REWARD_RATIO } from '../config/constants';
 import { levelForScore, pointsForLevel } from '../config/levels.config';
 import { MAX_STAT_POINTS, TOTAL_STATS } from '../config/stats.config';
+import {
+  BASIC_TANK_DEFINITION,
+  TANKS_CONFIG,
+  type TankClassId,
+} from '../config/tanks.config';
 import { recomputeDerivedStats } from '../core/deriveStats';
 import type { EventBus } from '../core/EventBus';
 import type { ShapeType } from '../entities/Shape';
@@ -102,7 +107,40 @@ export class LevelingSystem {
       recomputeDerivedStats(tank);
       eventBus?.emitLevelUp(tank.id, tank.level);
       eventBus?.emitStatPointsChanged(tank.id, tank.statPoints);
+      this.checkEvolution(tank, eventBus);
     }
+  }
+
+  /**
+   * 檢查坦克是否達成轉職條件並發布可進化事件
+   */
+  public checkEvolution(tank: Tank, eventBus?: EventBus): void {
+    if (
+      tank.active &&
+      tank.level >= 15 &&
+      tank.definition.tier === 1 &&
+      tank.definition.evolutions.length > 0
+    ) {
+      eventBus?.emitEvolutionAvailable(tank.id, tank.definition.evolutions);
+    }
+  }
+
+  /**
+   * 將坦克轉職為目標職業
+   */
+  public evolveTank(
+    tank: Tank,
+    targetClassId: TankClassId,
+    eventBus?: EventBus,
+  ): boolean {
+    const targetDef = TANKS_CONFIG[targetClassId];
+    if (!targetDef) return false;
+    if (tank.level < targetDef.requiredLevel) return false;
+
+    tank.setClass(targetDef);
+    recomputeDerivedStats(tank);
+    eventBus?.emitClassChanged(tank.id, targetClassId);
+    return true;
   }
 
   /**
@@ -145,12 +183,14 @@ export class LevelingSystem {
   }
 
   /**
-   * 坦克死亡重置為初始 Lv 1 狀態
+   * 坦克死亡重置為初始 Lv 1 Basic Tank 狀態
    */
   public resetTank(tank: Tank, eventBus?: EventBus): void {
+    tank.setClass(BASIC_TANK_DEFINITION);
     tank.resetStats();
     recomputeDerivedStats(tank);
     eventBus?.emitScoreChanged(tank.id, tank.score);
     eventBus?.emitStatPointsChanged(tank.id, tank.statPoints);
+    eventBus?.emitClassChanged(tank.id, 'basic');
   }
 }

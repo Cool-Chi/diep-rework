@@ -12,6 +12,8 @@ export interface InputCommand {
   shooting: boolean;
 }
 
+export const MAX_TANK_BARRELS = 8;
+
 /**
  * 坦克實體模型（純扁平數值，遵循 Zero-Allocation 鐵律）
  */
@@ -50,9 +52,9 @@ export class Tank {
   public moveAccelScale = 1.0; // 移動加速度縮放倍率
 
   public reloadCooldown = 0; // 當前剩餘裝填冷卻 tick 數
-  public barrelCooldowns: Int32Array; // 各砲管獨立冷卻
+  public readonly barrelCooldowns = new Int32Array(MAX_TANK_BARRELS); // 固定預配砲管獨立冷卻 (零 GC)
 
-  // 坦克定義 (M2 僅 Basic Tank)
+  // 坦克定義 (Tier 1 ~ Tier 3)
   public definition: TankDefinition = BASIC_TANK_DEFINITION;
 
   // 預先配置、重複使用的 InputCommand 物件，供 InputManager (玩家) 或 AISystem (AI) 寫入
@@ -76,7 +78,31 @@ export class Tank {
     this.prevX = startX;
     this.prevY = startY;
     this.radius = radius;
-    this.barrelCooldowns = new Int32Array(this.definition.barrels.length);
+    this.resetBarrelCooldowns();
+  }
+
+  /**
+   * 切換職業定義並重設砲管冷卻狀態
+   */
+  public setClass(definition: TankDefinition): void {
+    this.definition = definition;
+    this.resetBarrelCooldowns();
+  }
+
+  /**
+   * 重設砲管冷卻（依照相位延遲比例初始化）
+   */
+  public resetBarrelCooldowns(): void {
+    const barrels = this.definition.barrels;
+    const len = barrels.length;
+    for (let b = 0; b < MAX_TANK_BARRELS; b++) {
+      if (b < len) {
+        const ratio = barrels[b].fireDelayRatio || 0;
+        this.barrelCooldowns[b] = Math.round(this.reloadTicks * ratio);
+      } else {
+        this.barrelCooldowns[b] = 0;
+      }
+    }
   }
 
   /**
@@ -91,9 +117,7 @@ export class Tank {
     this.vy = 0;
     this.hp = this.maxHp;
     this.active = true;
-    for (let b = 0; b < this.barrelCooldowns.length; b++) {
-      this.barrelCooldowns[b] = 0;
-    }
+    this.resetBarrelCooldowns();
   }
 
   /**

@@ -2,6 +2,7 @@ import { Container } from 'pixi.js';
 import type { Camera } from '../core/Camera';
 import type { EventBus } from '../core/EventBus';
 import type { Tank } from '../entities/Tank';
+import { EvolutionPanel } from './EvolutionPanel';
 import { uiScale } from './hudMath';
 import { MiniMap } from './MiniMap';
 import { ScoreBar } from './ScoreBar';
@@ -9,12 +10,13 @@ import { StatUpgradePanel } from './StatUpgradePanel';
 
 /**
  * 根 HUD 容器與管理器 (All-in-Canvas UI)
- * 統一管理屬性升級面板、經驗分數條與小地圖
+ * 統一管理屬性升級面板、轉職卡牌面板、經驗分數條與小地圖
  */
 export class HUD {
   public readonly container = new Container();
 
   public readonly statPanel: StatUpgradePanel;
+  public readonly evolutionPanel: EvolutionPanel;
   public readonly scoreBar = new ScoreBar();
   public readonly miniMap = new MiniMap();
 
@@ -22,9 +24,11 @@ export class HUD {
 
   constructor(eventBus: EventBus) {
     this.statPanel = new StatUpgradePanel(eventBus);
+    this.evolutionPanel = new EvolutionPanel(eventBus);
 
-    // 依層次添加至 HUD 根容器（屬性面板、分數條、小地圖）
+    // 依層次添加至 HUD 根容器（轉職面板在左上、屬性在左下、分數在底中、小地圖在右下）
     this.container.addChild(this.statPanel.container);
+    this.container.addChild(this.evolutionPanel.container);
     this.container.addChild(this.scoreBar.container);
     this.container.addChild(this.miniMap.container);
   }
@@ -35,6 +39,7 @@ export class HUD {
   public resize(screenWidth: number, screenHeight: number): void {
     const scale = uiScale(screenWidth, screenHeight);
     this.statPanel.resize(screenWidth, screenHeight, scale);
+    this.evolutionPanel.resize(scale);
     this.scoreBar.resize(screenWidth, screenHeight, scale);
     this.miniMap.resize(screenWidth, screenHeight, scale);
   }
@@ -45,16 +50,20 @@ export class HUD {
   public isOverUi(screenX: number, screenY: number): boolean {
     if (!this.visible) return false;
     return (
+      this.evolutionPanel.containsPoint(screenX, screenY) ||
       this.statPanel.containsPoint(screenX, screenY) ||
       this.miniMap.containsPoint(screenX, screenY)
     );
   }
 
   /**
-   * 處理滑鼠按下事件 (若點擊在屬性面板的 + 上，觸發升級)
+   * 處理滑鼠按下事件 (若點擊在轉職卡牌或屬性面板的 + 上，觸發對應行為)
    */
   public handlePointerDown(screenX: number, screenY: number): boolean {
     if (!this.visible) return false;
+    if (this.evolutionPanel.handlePointerDown(screenX, screenY)) {
+      return true;
+    }
     return this.statPanel.handlePointerDown(screenX, screenY);
   }
 

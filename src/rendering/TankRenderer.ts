@@ -1,18 +1,20 @@
 import { Container, Graphics } from 'pixi.js';
 import {
-  BASE_BARREL_LENGTH,
-  BASE_BARREL_WIDTH,
   BASE_TANK_RADIUS,
   COLOR_BARREL_GRAY,
   COLOR_STROKE,
   COLOR_TANK_BLUE,
   STROKE_WIDTH,
 } from '../config/constants';
+import {
+  BASIC_TANK_DEFINITION,
+  type TankDefinition,
+} from '../config/tanks.config';
 
 /**
- * 基礎坦克渲染器
- * 結構：底盤圓形 + 矩形砲管 + 加厚描邊
- * 砲管朝向角度在每一渲染幀依滑鼠實時更新（確保極致跟手感）
+ * 坦克渲染器 (支援 Tier 1 ~ Tier 3 多砲管幾何與喇叭口)
+ * 結構：底盤圓形 + 動態多砲管幾何 (平行雙管、前後背向管、喇叭口) + 描邊
+ * 砲管朝向角度在每一渲染幀依滑鼠即時更新
  */
 export class TankRenderer {
   public readonly container = new Container();
@@ -21,21 +23,81 @@ export class TankRenderer {
   private readonly barrelGraphics = new Graphics();
   private readonly bodyGraphics = new Graphics();
 
-  constructor(radius = BASE_TANK_RADIUS) {
-    // 1. 建立砲管幾何（自中心向右延伸，置於圓形本體下方）
-    this.barrelGraphics
-      .rect(0, -BASE_BARREL_WIDTH / 2, BASE_BARREL_LENGTH, BASE_BARREL_WIDTH)
-      .fill({ color: COLOR_BARREL_GRAY })
-      .stroke({ color: COLOR_STROKE, width: STROKE_WIDTH });
+  private currentClassId = '';
+
+  constructor(definition: TankDefinition = BASIC_TANK_DEFINITION) {
     this.barrelContainer.addChild(this.barrelGraphics);
     this.container.addChild(this.barrelContainer);
+    this.container.addChild(this.bodyGraphics);
 
-    // 2. 建立坦克圓形底盤幾何
+    this.setDefinition(definition);
+  }
+
+  /**
+   * 切換坦克職業定義時，重新構建砲管多邊形幾何
+   * （僅在轉職或重設時執行一次，熱路徑零配置）
+   */
+  public setDefinition(
+    definition: TankDefinition,
+    radius = BASE_TANK_RADIUS,
+  ): void {
+    if (this.currentClassId === definition.id) return;
+    this.currentClassId = definition.id;
+
+    // 1. 繪製所有砲管
+    this.barrelGraphics.clear();
+    const barrels = definition.barrels;
+    const count = barrels.length;
+
+    for (let b = 0; b < count; b++) {
+      const barrel = barrels[b];
+      const L = barrel.length;
+      const wBase = barrel.width;
+      const wTip = barrel.tipWidth ?? barrel.width;
+      const theta = barrel.angle;
+      const ox = barrel.offsetX;
+      const oy = barrel.offsetY;
+
+      const cos = Math.cos(theta);
+      const sin = Math.sin(theta);
+
+      // 未旋轉座標下的四個頂點 (自底座向砲口)
+      // p0: 底座左邊緣 (0, -wBase / 2)
+      // p1: 砲口左邊緣 (L, -wTip / 2)
+      // p2: 砲口右邊緣 (L, wTip / 2)
+      // p3: 底座右邊緣 (0, wBase / 2)
+      const x0 = 0;
+      const y0 = -wBase * 0.5;
+      const x1 = L;
+      const y1 = -wTip * 0.5;
+      const x2 = L;
+      const y2 = wTip * 0.5;
+      const x3 = 0;
+      const y3 = wBase * 0.5;
+
+      const pts = [
+        x0 * cos - y0 * sin + ox,
+        x0 * sin + y0 * cos + oy,
+        x1 * cos - y1 * sin + ox,
+        x1 * sin + y1 * cos + oy,
+        x2 * cos - y2 * sin + ox,
+        x2 * sin + y2 * cos + oy,
+        x3 * cos - y3 * sin + ox,
+        x3 * sin + y3 * cos + oy,
+      ];
+
+      this.barrelGraphics
+        .poly(pts)
+        .fill({ color: COLOR_BARREL_GRAY })
+        .stroke({ color: COLOR_STROKE, width: STROKE_WIDTH });
+    }
+
+    // 2. 繪製坦克圓形底盤
+    this.bodyGraphics.clear();
     this.bodyGraphics
       .circle(0, 0, radius)
       .fill({ color: COLOR_TANK_BLUE })
       .stroke({ color: COLOR_STROKE, width: STROKE_WIDTH });
-    this.container.addChild(this.bodyGraphics);
   }
 
   /**
