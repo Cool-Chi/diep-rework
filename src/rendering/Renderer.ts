@@ -51,6 +51,8 @@ export class Renderer {
   }
 
   public destroy(): void {
-    this.app.destroy(true, { children: true });
+    if (typeof globalThis.removeEventListener === 'function') {
+      this.app.destroy(true, { children: true });
+    }
   }
 }

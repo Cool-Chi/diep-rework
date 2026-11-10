@@ -35,6 +35,7 @@ export class Tank {
   // 重生無敵保護與肉搏冷卻狀態
   public invulnerableTicks = 0; // 重生無敵剩餘 ticks (75 ticks = 3 秒)
   public lastBodyContactTick = 0; // 上次承受肉搏撞擊之 tick (用於防秒殺冷卻)
+  public isGodMode = false; // 無敵模式（不受任何子彈、形狀或敵方肉搏傷害）
 
   // AI 戰術狀態機 (包含滯後防抖計時器)
   public aiState: 'farming' | 'engaging' | 'retreating' = 'farming';

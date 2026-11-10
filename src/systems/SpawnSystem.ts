@@ -54,6 +54,7 @@ interface DeadAiRecord {
 export class SpawnSystem {
   public readonly aiTanks: Tank[] = [];
   private readonly deadAiQueue: DeadAiRecord[] = [];
+  public isSpawningPaused = false; // 是否暫停自動生成 AI (沙盒模式使用)
 
   constructor() {
     // 預先建立 40 隻 AI 坦克實體 (零 GC)
@@ -85,6 +86,8 @@ export class SpawnSystem {
    * 每個模擬 tick (25 TPS) 更新 AI 重生佇列與維持場上數量
    */
   public update(currentTick: number, playerTank: Tank): void {
+    if (this.isSpawningPaused) return;
+
     // 1. 處理死亡 AI 重生
     const qLen = this.deadAiQueue.length;
     for (let i = qLen - 1; i >= 0; i--) {

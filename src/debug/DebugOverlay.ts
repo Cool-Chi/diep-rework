@@ -49,7 +49,7 @@ export class DebugOverlay {
   private tankDiedCount = 0;
 
   // 狀態開關
-  public isGodMode = false;
+  public isGodMode = true; // 開局預設開啟無敵模式
 
   private onKeyDownBound: (e: KeyboardEvent) => void;
 
@@ -117,6 +117,9 @@ export class DebugOverlay {
   public update(): void {
     if (this.isGodMode) {
       this.game.playerTank.hp = this.game.playerTank.maxHp;
+      this.game.playerTank.isGodMode = true;
+    } else {
+      this.game.playerTank.isGodMode = false;
     }
 
     this.frameCount++;
@@ -203,7 +206,7 @@ export class DebugOverlay {
       <div>Render: <b>${this.avgRenderMs.toFixed(2)}ms</b> (max <b>${this.maxRenderMs.toFixed(2)}ms</b>)</div>
       <div>HUD: <b>${this.avgHudMs.toFixed(2)}ms</b> (max <b>${this.maxHudMs.toFixed(2)}ms</b>)</div>
       <div>HealthBars: <b>${this.game.healthBarRenderer.activeCount}</b> / ${this.game.healthBarRenderer.capacity}</div>
-      <div>Bullets: ${bulletAlert ? `<b style="color:#ff3333">${activeBullets} / ${visibleBullets} [ALERT]</b>` : `<b>${activeBullets}</b> act / <b>${visibleBullets}</b> vis`}</div>
+      <div>Bullets: ${bulletAlert ? `<b style="color:#ff3333">${activeBullets} / ${visibleBullets} [ALERT]</b>` : `<b>${activeBullets}</b> act / <b>${visibleBullets}</b> vis`} | Clash: <b style="color:#ffcc00">${this.game.collisionSystem.bulletClashCount}</b></div>
       <div>Shapes: ${shapeAlert ? `<b style="color:#ff3333">${activeShapes} / ${visibleShapes} [ALERT]</b>` : `<b>${activeShapes}</b> act / <b>${visibleShapes}</b> vis`}</div>
       <div>Particles: <b>${this.game.particleRenderer.visibleCount}</b> vis / <b>${this.game.particlePool.capacity}</b></div>
       <div style="border-top:1px dashed rgba(255,255,255,0.15);margin:3px 0;padding-top:3px;">
@@ -217,7 +220,7 @@ export class DebugOverlay {
       </div>
       <div>Keys: <b style="color:#ffff00">${pressedStr}</b> | Dead: S:<b>${this.shapeDestroyedCount}</b> T:<b>${this.tankDiedCount}</b></div>
       <div>God: <b style="color:${this.isGodMode ? '#00ff88' : '#ff5555'}">${this.isGodMode ? 'ON' : 'OFF'}</b> | GodView: <b style="color:${this.game.camera.isGodView ? '#00ff88' : '#888888'}">${this.game.camera.isGodView ? 'ON' : 'OFF'}</b></div>
-      <div>IgnorePlayer: <b style="color:${this.game.aiSystem.ignorePlayer ? '#00ff88' : '#ff5555'}">${this.game.aiSystem.ignorePlayer ? 'ON' : 'OFF'}</b></div>
+      <div>IgnorePlayer: <b style="color:${this.game.aiSystem.ignorePlayer ? '#00ff88' : '#ff5555'}">${this.game.aiSystem.ignorePlayer ? 'ON' : 'OFF'}</b> | Sandbox: <b style="color:${this.game.agentTest.isSandboxActive ? '#00ff88' : '#888888'}">${this.game.agentTest.isSandboxActive ? `ON (${this.game.agentTest.sandboxDummyClass})` : 'OFF'}</b></div>
     `;
   }
 
@@ -304,11 +307,18 @@ export class DebugOverlay {
       return b;
     };
 
-    // 無敵切換按鈕
-    const godBtn = createBtn('Toggle God Mode', () => {
-      this.isGodMode = !this.isGodMode;
-      this.renderMetrics();
-    });
+    // 無敵切換按鈕 (預設開啟)
+    const godBtn = createBtn(
+      `God: ${this.isGodMode ? 'ON' : 'OFF'}`,
+      () => {
+        this.isGodMode = !this.isGodMode;
+        this.game.playerTank.isGodMode = this.isGodMode;
+        godBtn.textContent = `God: ${this.isGodMode ? 'ON' : 'OFF'}`;
+        godBtn.style.backgroundColor = this.isGodMode ? '#1b4965' : '#555555';
+        this.renderMetrics();
+      },
+      this.isGodMode ? '#1b4965' : '#555555',
+    );
     btnContainer.appendChild(godBtn);
 
     // 無視玩家切換按鈕 (預設開啟)
@@ -538,6 +548,96 @@ export class DebugOverlay {
       '#2a6f97',
     );
     btnContainer.appendChild(triggerEvoBtn);
+
+    // 子彈相消測試按鈕
+    const clashBasicBtn = createBtn(
+      'Clash: Basic x2',
+      () => {
+        this.game.agentTest.spawnClash('basic', 'basic');
+      },
+      '#7b4397',
+    );
+    btnContainer.appendChild(clashBasicBtn);
+
+    const clashDestrBtn = createBtn(
+      'Clash: Destr vs Gun',
+      () => {
+        this.game.agentTest.spawnClash('destroyer', 'gunner', {
+          bulletCountB: 5,
+        });
+      },
+      '#8f3b76',
+    );
+    btnContainer.appendChild(clashDestrBtn);
+
+    const clashDestr2Btn = createBtn(
+      'Clash: Destr x2',
+      () => {
+        this.game.agentTest.spawnClash('destroyer', 'destroyer');
+      },
+      '#a03b5b',
+    );
+    btnContainer.appendChild(clashDestr2Btn);
+
+    const clearBulletsBtn = createBtn(
+      'Clear Bullets',
+      () => {
+        this.game.agentTest.clearAllBullets();
+      },
+      '#5a5a5a',
+    );
+    btnContainer.appendChild(clearBulletsBtn);
+
+    // 小型對打測試沙盒按鈕
+    const sandboxBtn = createBtn(
+      this.game.agentTest.isSandboxActive ? 'Exit Sandbox' : '🎯 Duel Sandbox',
+      () => {
+        if (this.game.agentTest.isSandboxActive) {
+          this.game.agentTest.stopBulletSandbox();
+        } else {
+          this.game.agentTest.startBulletSandbox('basic');
+        }
+        sandboxBtn.textContent = this.game.agentTest.isSandboxActive
+          ? 'Exit Sandbox'
+          : '🎯 Duel Sandbox';
+        sandboxBtn.style.backgroundColor = this.game.agentTest.isSandboxActive
+          ? '#e63946'
+          : '#2a9d8f';
+        this.renderMetrics();
+      },
+      this.game.agentTest.isSandboxActive ? '#e63946' : '#2a9d8f',
+    );
+    btnContainer.appendChild(sandboxBtn);
+
+    const dummyTwinBtn = createBtn(
+      'Dummy: Twin',
+      () => {
+        this.game.agentTest.setSandboxDummyClass('twin');
+        this.renderMetrics();
+      },
+      '#457b9d',
+    );
+    btnContainer.appendChild(dummyTwinBtn);
+
+    const dummyDestrBtn = createBtn(
+      'Dummy: Destr',
+      () => {
+        this.game.agentTest.setSandboxDummyClass('destroyer');
+        this.renderMetrics();
+      },
+      '#6a4c93',
+    );
+    btnContainer.appendChild(dummyDestrBtn);
+
+    const dummyGunnerBtn = createBtn(
+      'Dummy: Gunner',
+      () => {
+        this.game.agentTest.setSandboxDummyClass('gunner');
+        this.renderMetrics();
+      },
+      '#e76f51',
+    );
+    btnContainer.appendChild(dummyGunnerBtn);
 
     // 職業一鍵切換折疊區 (Tier 1 ~ Tier 4 全 21 款職業)
     const detailsClasses = document.createElement('details');
@@ -911,6 +1011,46 @@ export class DebugOverlay {
       () => this.game.healthBarRenderer.healthBarWidthFactor,
       (v) => {
         this.game.healthBarRenderer.healthBarWidthFactor = v;
+      },
+    );
+    createSlider(
+      'Bullet Push',
+      0.0,
+      2.0,
+      0.05,
+      () => this.game.collisionSystem.bulletPushFactor,
+      (v) => {
+        this.game.collisionSystem.bulletPushFactor = v;
+      },
+    );
+    createSlider(
+      'Bullet Damping',
+      0.5,
+      1.0,
+      0.01,
+      () => this.game.collisionSystem.bulletDamping,
+      (v) => {
+        this.game.collisionSystem.bulletDamping = v;
+      },
+    );
+    createSlider(
+      'Bullet Restitution',
+      0.0,
+      1.0,
+      0.05,
+      () => this.game.collisionSystem.bulletRestitution,
+      (v) => {
+        this.game.collisionSystem.bulletRestitution = v;
+      },
+    );
+    createSlider(
+      'Bullet Deflection',
+      0.0,
+      2.0,
+      0.05,
+      () => this.game.collisionSystem.bulletDeflectionFactor,
+      (v) => {
+        this.game.collisionSystem.bulletDeflectionFactor = v;
       },
     );
 

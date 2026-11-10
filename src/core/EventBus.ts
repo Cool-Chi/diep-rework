@@ -24,6 +24,14 @@ type EvolutionAvailableHandler = (
   candidates: TankClassId[],
 ) => void;
 type BulletHitHandler = (x: number, y: number, color: number) => void;
+type BulletClashHandler = (
+  x: number,
+  y: number,
+  radiusA: number,
+  radiusB: number,
+  colorA: number,
+  colorB: number,
+) => void;
 
 /**
  * 零配置型別安全事件匯流排
@@ -40,6 +48,7 @@ export class EventBus {
   private classChangedHandlers: ClassChangedHandler[] = [];
   private evolutionAvailableHandlers: EvolutionAvailableHandler[] = [];
   private bulletHitHandlers: BulletHitHandler[] = [];
+  private bulletClashHandlers: BulletClashHandler[] = [];
 
   // 1. Shape Destroyed
   public onShapeDestroyed(handler: ShapeDestroyedHandler): void {
@@ -244,6 +253,32 @@ export class EventBus {
     }
   }
 
+  // 11. Bullet Clash (子彈互撞衝擊與破片火花特效)
+  public onBulletClash(handler: BulletClashHandler): void {
+    this.bulletClashHandlers.push(handler);
+  }
+
+  public offBulletClash(handler: BulletClashHandler): void {
+    const idx = this.bulletClashHandlers.indexOf(handler);
+    if (idx !== -1) {
+      this.bulletClashHandlers.splice(idx, 1);
+    }
+  }
+
+  public emitBulletClash(
+    x: number,
+    y: number,
+    radiusA = 9,
+    radiusB = 9,
+    colorA = 0x00b2e1,
+    colorB = 0xfc7677,
+  ): void {
+    const len = this.bulletClashHandlers.length;
+    for (let i = 0; i < len; i++) {
+      this.bulletClashHandlers[i](x, y, radiusA, radiusB, colorA, colorB);
+    }
+  }
+
   public clear(): void {
     this.shapeDestroyedHandlers.length = 0;
     this.tankDiedHandlers.length = 0;
@@ -255,5 +290,6 @@ export class EventBus {
     this.classChangedHandlers.length = 0;
     this.evolutionAvailableHandlers.length = 0;
     this.bulletHitHandlers.length = 0;
+    this.bulletClashHandlers.length = 0;
   }
 }

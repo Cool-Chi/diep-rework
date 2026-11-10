@@ -1,4 +1,8 @@
 import {
+  BULLET_COLLISION_DAMPING,
+  BULLET_COLLISION_DEFLECTION_FACTOR,
+  BULLET_COLLISION_PUSH_FACTOR,
+  BULLET_COLLISION_RESTITUTION,
   BULLET_KNOCKBACK_FACTOR,
   COLLISION_PUSH_FACTOR,
   TANK_BODY_CONTACT_COOLDOWN_TICKS,
@@ -12,6 +16,7 @@ import type { Tank } from '../entities/Tank';
 import {
   decodeEntityIndex,
   decodeEntityType,
+  ENTITY_TYPE_BULLET,
   ENTITY_TYPE_SHAPE,
   ENTITY_TYPE_TANK,
   encodeEntityCode,
@@ -21,12 +26,17 @@ import type { ShapeSystem } from './ShapeSystem';
 
 /**
  * 碰撞結算系統 (CollisionSystem)
- * 負責維護 SpatialHash、子彈防穿透掃掠結算、形狀/坦克推開衝量與比例傷害計算
+ * 負責維護 SpatialHash、子彈防穿透掃掠結算、子彈相消物理、形狀/坦克推開衝量與比例傷害計算
  */
 export class CollisionSystem {
   public readonly spatialHash: SpatialHash;
   public pushFactor = COLLISION_PUSH_FACTOR;
   public knockbackFactor = BULLET_KNOCKBACK_FACTOR;
+  public bulletPushFactor = BULLET_COLLISION_PUSH_FACTOR;
+  public bulletDamping = BULLET_COLLISION_DAMPING;
+  public bulletRestitution = BULLET_COLLISION_RESTITUTION;
+  public bulletDeflectionFactor = BULLET_COLLISION_DEFLECTION_FACTOR;
+  public bulletClashCount = 0;
 
   constructor(spatialHash?: SpatialHash) {
     this.spatialHash = spatialHash ?? new SpatialHash();
@@ -70,8 +80,19 @@ export class CollisionSystem {
       }
     }
 
-    // 2. 子彈碰撞檢測（線段掃掠防穿透 + 比例傷害公式）
     const bulletCap = bulletPool.capacity;
+    for (let b = 0; b < bulletCap; b++) {
+      if (bulletPool.isActive(b)) {
+        const bullet = bulletPool.items[b];
+        this.spatialHash.insert(
+          bullet.x,
+          bullet.y,
+          encodeEntityCode(ENTITY_TYPE_BULLET, b),
+        );
+      }
+    }
+
+    // 2. 子彈碰撞檢測（線段掃掠防穿透 + 比例傷害公式 + 子彈相消物理）
     for (let b = 0; b < bulletCap; b++) {
       if (!bulletPool.isActive(b)) continue;
       const bullet = bulletPool.items[b];
@@ -158,11 +179,12 @@ export class CollisionSystem {
             }
           }
 
-          // 同源子彈免疫與重生無敵保護
+          // 同源子彈免疫、重生無敵保護與上帝無敵模式
           if (
             !targetTank?.active ||
             targetTank.id === bullet.ownerId ||
-            targetTank.invulnerableTicks > 0
+            targetTank.invulnerableTicks > 0 ||
+            targetTank.isGodMode
           ) {
             continue;
           }
@@ -200,6 +222,132 @@ export class CollisionSystem {
                 targetTank.x,
                 targetTank.y,
               );
+            }
+          }
+        } else if (type === ENTITY_TYPE_BULLET) {
+          // 子彈與子彈碰撞結算 (Bullet-vs-Bullet Clash)
+          // 避免自碰與重複結算相同子彈對 (只在 idx > b 時處理)
+          if (idx <= b) continue;
+          if (!bulletPool.isActive(idx)) continue;
+          const otherBullet = bulletPool.items[idx];
+          if (!otherBullet.active || otherBullet.hp <= 0) continue;
+          // 同一主人發射的子彈不互撞免疫
+          if (bullet.ownerId === otherBullet.ownerId) continue;
+
+          // 碰撞判定：先靜態圓形距離檢測，再相對線段掃掠防穿透
+          const minDist = bullet.radius + otherBullet.radius;
+          const dx = otherBullet.x - bullet.x;
+          const dy = otherBullet.y - bullet.y;
+          const distSq = dx * dx + dy * dy;
+
+          let isColliding = distSq <= minDist * minDist;
+          if (!isColliding) {
+            // 相對掃掠：從上一 tick 相對向量到當前相對向量，檢測相對於 (0,0) 的距離
+            const relPrevX = otherBullet.prevX - bullet.prevX;
+            const relPrevY = otherBullet.prevY - bullet.prevY;
+            isColliding = this.testSweptCircle(
+              relPrevX,
+              relPrevY,
+              dx,
+              dy,
+              0,
+              0,
+              minDist,
+            );
+          }
+
+          if (isColliding) {
+            this.bulletClashCount++;
+
+            // 1. 雙向快照比例傷害 (Snapshot Proportional Damage)
+            const factorA =
+              otherBullet.damage > 0
+                ? Math.min(1.0, bullet.hp / otherBullet.damage)
+                : 1.0;
+            const factorB =
+              bullet.damage > 0
+                ? Math.min(1.0, otherBullet.hp / bullet.damage)
+                : 1.0;
+
+            const damageToB = bullet.damage * factorA;
+            const damageToA = otherBullet.damage * factorB;
+
+            bullet.hp -= damageToA;
+            otherBullet.hp -= damageToB;
+
+            // 2. 撞擊火花特效（觸發專屬子彈相消破片火花）
+            const sparkX = (bullet.x + otherBullet.x) * 0.5;
+            const sparkY = (bullet.y + otherBullet.y) * 0.5;
+            eventBus.emitBulletHit(sparkX, sparkY, 0xfffae0);
+            eventBus.emitBulletClash(
+              sparkX,
+              sparkY,
+              bullet.radius,
+              otherBullet.radius,
+              bullet.color,
+              otherBullet.color,
+            );
+
+            // 3. 質量反比推開與彈性偏轉衝量 (質量 m = r^2)
+            const mA = bullet.radius * bullet.radius;
+            const mB = otherBullet.radius * otherBullet.radius;
+            const invTotal = 1 / (mA + mB);
+
+            let dist = Math.sqrt(distSq);
+            let nx = 1;
+            let ny = 0;
+            if (dist > 0.0001) {
+              nx = dx / dist;
+              ny = dy / dist;
+            } else {
+              dist = 0.0001;
+            }
+
+            // 重疊分離推開
+            if (dist < minDist) {
+              const overlap = minDist - dist;
+              bullet.x -=
+                nx * overlap * (mB * invTotal) * this.bulletPushFactor;
+              bullet.y -=
+                ny * overlap * (mB * invTotal) * this.bulletPushFactor;
+              otherBullet.x +=
+                nx * overlap * (mA * invTotal) * this.bulletPushFactor;
+              otherBullet.y +=
+                ny * overlap * (mA * invTotal) * this.bulletPushFactor;
+            }
+
+            // 法向相對速度與彈性偏轉衝量
+            const rvx = otherBullet.vx - bullet.vx;
+            const rvy = otherBullet.vy - bullet.vy;
+            const velAlongNormal = rvx * nx + rvy * ny;
+
+            if (velAlongNormal < 0) {
+              const impulseMag =
+                -(1 + this.bulletRestitution) *
+                velAlongNormal *
+                this.bulletDeflectionFactor;
+
+              bullet.vx -= nx * (mB * invTotal) * impulseMag;
+              bullet.vy -= ny * (mB * invTotal) * impulseMag;
+              otherBullet.vx += nx * (mA * invTotal) * impulseMag;
+              otherBullet.vy += ny * (mA * invTotal) * impulseMag;
+            }
+
+            // 速度阻尼
+            bullet.vx *= this.bulletDamping;
+            bullet.vy *= this.bulletDamping;
+            otherBullet.vx *= this.bulletDamping;
+            otherBullet.vy *= this.bulletDamping;
+
+            // 4. 生命歸零回收處理
+            if (otherBullet.hp <= 0) {
+              otherBullet.active = false;
+              bulletPool.release(idx);
+            }
+            if (bullet.hp <= 0) {
+              bullet.active = false;
+              bulletPool.release(b);
+              break;
             }
           }
         }
@@ -273,8 +421,10 @@ export class CollisionSystem {
             const damageToTank = shape.bodyDamage;
 
             shape.hp -= damageToShape;
-            tank.hp -= damageToTank;
-            tank.lastDamageTick = currentTick;
+            if (!tank.isGodMode) {
+              tank.hp -= damageToTank;
+              tank.lastDamageTick = currentTick;
+            }
 
             if (shape.hp <= 0) {
               shape.active = false;
@@ -287,7 +437,7 @@ export class CollisionSystem {
               );
             }
 
-            if (tank.hp <= 0) {
+            if (tank.hp <= 0 && !tank.isGodMode) {
               tank.active = false;
               eventBus.emitTankDied(tank.id, -1, tank.x, tank.y);
             }
@@ -385,23 +535,26 @@ export class CollisionSystem {
             if (cooldownPassedA || cooldownPassedB) {
               tankA.lastBodyContactTick = currentTick;
               tankB.lastBodyContactTick = currentTick;
-              tankA.lastDamageTick = currentTick;
-              tankB.lastDamageTick = currentTick;
 
               const damageToA = tankB.bodyDamageToTank;
               const damageToB = tankA.bodyDamageToTank;
 
-              tankA.hp -= damageToA;
-              tankB.hp -= damageToB;
-
-              if (tankA.hp <= 0) {
-                tankA.active = false;
-                eventBus.emitTankDied(tankA.id, tankB.id, tankA.x, tankA.y);
+              if (!tankA.isGodMode) {
+                tankA.hp -= damageToA;
+                tankA.lastDamageTick = currentTick;
+                if (tankA.hp <= 0) {
+                  tankA.active = false;
+                  eventBus.emitTankDied(tankA.id, tankB.id, tankA.x, tankA.y);
+                }
               }
 
-              if (tankB.hp <= 0) {
-                tankB.active = false;
-                eventBus.emitTankDied(tankB.id, tankA.id, tankB.x, tankB.y);
+              if (!tankB.isGodMode) {
+                tankB.hp -= damageToB;
+                tankB.lastDamageTick = currentTick;
+                if (tankB.hp <= 0) {
+                  tankB.active = false;
+                  eventBus.emitTankDied(tankB.id, tankA.id, tankB.x, tankB.y);
+                }
               }
             }
           }

@@ -244,6 +244,18 @@ export const SHAPE_DAMPING = 0.96;
 export const COLLISION_PUSH_FACTOR = 0.6;
 export const BULLET_KNOCKBACK_FACTOR = 0.4;
 
+/** 子彈相消物理重疊分離推開係數 */
+export const BULLET_COLLISION_PUSH_FACTOR = 0.85;
+
+/** 子彈互撞衝擊速度阻尼 (0.90 代表撞擊後保有 90% 原向速度) */
+export const BULLET_COLLISION_DAMPING = 0.9;
+
+/** 子彈相消法向彈性衝量恢復係數 (0.45 產生清脆的彈性偏轉反饋) */
+export const BULLET_COLLISION_RESTITUTION = 0.45;
+
+/** 子彈相消法向偏轉衝量增益倍率 (強化掠射斜撞時的軌道折射與偏轉) */
+export const BULLET_COLLISION_DEFLECTION_FACTOR = 0.85;
+
 /**
  * 血條在 Y 軸相對於實體中心的偏移係數 (offsetY = radius * HEALTHBAR_OFFSET_FACTOR)
  * TODO(tune): 未查證，依視覺手感調整（置於實體圓形底緣下方）

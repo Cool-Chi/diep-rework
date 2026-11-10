@@ -72,7 +72,7 @@ flowchart TD
   - 上帝視角標籤字體優化（適度放大無重疊）、除錯面板輕量折疊（265px 寬度）、AI 無視玩家調試功能（預設開啟，可一鍵切換，支援 `/` 與 `~` 開啟面板）。
   - 單元測試 141 項 100% 通過，實機瀏覽器 165 FPS 運行。
 
-### 階段二 (Phase 2): 子彈相消物理 (Bullet-vs-Bullet Collision)
+### 階段二 (Phase 2): 子彈相消物理 (Bullet-vs-Bullet Collision) [已完成]
 1. **將子彈納入空間分割**：
    - [`src/systems/CollisionSystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/systems/CollisionSystem.ts)：在每 tick 開始時將所有活躍子彈插入 `SpatialHash`（`ENTITY_TYPE_BULLET`）。
 2. **碰撞檢測與快照結算**：
@@ -80,12 +80,18 @@ flowchart TD
    - 線段掃掠防穿透（Swept CCD），觸發同步比例傷害對削：
      `factorA = min(1, hpA / dmgB)`, `factorB = min(1, hpB / dmgA)`
      `bulletA.hp -= dmgB * factorB`, `bulletB.hp -= dmgA * factorA`
-   - 質量反比推開與速度阻尼：
-     `m = radius * radius`，依質量比施加微推與減速。
-   - 中點火花與回收：`eventBus.emitBulletHit`，耐久歸零者釋放回 `bulletPool`。
-3. **階段驗證**：
-   - 新增 [`tests/bulletCollision.test.ts`](file:///c:/Users/weiqi/Projects/diep-rework/tests/bulletCollision.test.ts) 驗證同源子彈不互撞、對稱對撞同歸於盡、巨彈碾壓小子彈等案例。
-   - 執行 `npm test` 與 `npm run lint`。
+   - 質量反比推開與速度阻尼（`m = radius * radius`），施加微推與減速（巨彈幾乎不偏折，小子彈快速粉碎）。
+   - 中點火花與回收：`eventBus.emitBulletHit` 觸發淡金火花，耐久歸零者釋放回 `bulletPool`。
+3. **Agent 自主測試與遙測介面**：
+   - [`src/debug/AgentTestInterface.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/debug/AgentTestInterface.ts)：提供 `spawnClash`、`runClashBenchmark`、`tuneParams`、`startBulletSandbox`、`setSandboxDummyClass`、`stopBulletSandbox` 與 `getTelemetry`。
+   - [`src/debug/DebugOverlay.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/debug/DebugOverlay.ts)：面板即時顯示 `Clash` 計數、相消測試按鈕、靶機切換按鈕 (`🎯 Duel Sandbox`, `Dummy: Twin`, `Dummy: Destr`, `Dummy: Gunner`) 與 `Bullet Push` / `Bullet Damping` 即時滑桿。
+4. **子彈相撞相機抖動修復 (Authentic Camera Smoothness)**：
+   - 查證根因：原 `Game.spawnBulletClashSparks` 中呼叫 `this.camera.addShake()` 造成每次子彈互碰整個視窗隨機偏移震動，不符合原版 diep.io 瞄準手感。
+   - 徹底移除子彈碰撞的相機震動，保留純視覺破片火花與彈道偏折，達成 0 shake、絲滑平穩射擊體驗。
+5. **階段驗證與自動調優 (/auto-tune)**：
+   - 新增 [`tests/bulletCollision.test.ts`](file:///c:/Users/weiqi/Projects/diep-rework/tests/bulletCollision.test.ts) 與 [`tests/m8-arena.test.ts`](file:///c:/Users/weiqi/Projects/diep-rework/tests/m8-arena.test.ts)，全案 30 個測試檔案、152 項測試 100% 通過。
+   - 無頭 Arena 基準測試確認：Basic 相消捕獲率 100%、Destroyer 殘血比 97.4%、碰撞偏折角 48.7°、火花粒子 8.5 顆、平均 tick 耗時 0.005ms。
+   - 實機瀏覽器 autonomous benchmark 實測：157+ FPS、24~25 TPS，連續 30 ticks 採樣 `shakeIntensity === 0`，沙盒對打驗收截圖視覺無瑕。
 
 ### 階段三 (Phase 3): AI 彈幕威脅預判與主動抵消
 1. **實體狀態擴充**：

@@ -19,6 +19,7 @@ import { Shape, type ShapeType } from '../entities/Shape';
 export class ShapeSystem {
   public readonly shapes: Shape[] = [];
   public activeCount = 0;
+  public isAutoFillPaused = false; // 是否暫停自動補滿形狀 (沙盒模式使用)
 
   constructor() {
     for (let i = 0; i < SHAPE_CAPACITY; i++) {
@@ -190,7 +191,7 @@ export class ShapeSystem {
     }
 
     // 動態補滿形狀
-    if (this.activeCount < SHAPE_TARGET_COUNT) {
+    if (!this.isAutoFillPaused && this.activeCount < SHAPE_TARGET_COUNT) {
       this.fillToTarget(visibleBounds);
     }
   }

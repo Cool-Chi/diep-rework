@@ -8,6 +8,7 @@ import {
 } from '../config/constants';
 import { pointsForLevel, SCORE_FOR_LEVEL } from '../config/levels.config';
 import { BASIC_TANK_DEFINITION } from '../config/tanks.config';
+import { AgentTestInterface } from '../debug/AgentTestInterface';
 import type { DebugOverlay } from '../debug/DebugOverlay';
 import { Bullet } from '../entities/Bullet';
 import { Particle } from '../entities/Particle';
@@ -107,11 +108,13 @@ export class Game {
   ];
   private loop: GameLoop;
   public devOverlay: DebugOverlay | null = null;
+  public readonly agentTest = new AgentTestInterface(this);
   private onResizeBound: () => void;
   private onKeyDownBound: (e: KeyboardEvent) => void;
 
   constructor() {
     this.playerTank.name = 'You';
+    this.playerTank.isGodMode = true; // 開局預設開啟無敵模式
     this.allTanks.push(this.playerTank, ...this.spawnSystem.aiTanks);
 
     this.hud = new HUD(this.eventBus, () => this.respawnPlayer());
@@ -150,6 +153,11 @@ export class Game {
     // 監聽子彈命中火花特效
     this.eventBus.onBulletHit((x, y, color) => {
       this.spawnHitSparks(x, y, color);
+    });
+
+    // 監聽子彈互撞衝擊與破片火花特效
+    this.eventBus.onBulletClash((x, y, radiusA, radiusB, colorA, colorB) => {
+      this.spawnBulletClashSparks(x, y, radiusA, radiusB, colorA, colorB);
     });
 
     // 監聽幾何形狀摧毀特效
@@ -214,7 +222,9 @@ export class Game {
         }
       }
     };
-    window.addEventListener('keydown', this.onKeyDownBound);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', this.onKeyDownBound);
+    }
 
     this.loop = new GameLoop(this.update.bind(this));
     this.onResizeBound = this.handleResize.bind(this);
@@ -475,6 +485,9 @@ export class Game {
     recomputeDerivedStats(this.playerTank);
     this.eventBus.emitClassChanged(this.playerTank.id, 'basic');
 
+    this.playerTank.isGodMode = this.devOverlay
+      ? this.devOverlay.isGodMode
+      : true;
     this.playerTank.invulnerableTicks = SPAWN_INVULNERABLE_TICKS; // 75 ticks (3 秒無敵)
     this.camera.spectateTarget = null;
     this.camera.teleport(safePos.x, safePos.y);
@@ -569,6 +582,45 @@ export class Game {
     }
   }
 
+  public spawnBulletClashSparks(
+    x: number,
+    y: number,
+    radiusA: number,
+    radiusB: number,
+    colorA: number,
+    colorB: number,
+  ): void {
+    const maxR = Math.max(radiusA, radiusB);
+    const count = Math.min(18, Math.max(8, Math.round(maxR * 0.8)));
+
+    for (let i = 0; i < count; i++) {
+      const idx = this.particlePool.acquire();
+      if (idx < 0) break;
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 4.0 + Math.random() * 6.5;
+      const radius = 2.0 + Math.random() * (maxR >= 16 ? 3.0 : 1.8);
+      const life = 8 + Math.floor(Math.random() * 8);
+
+      // 粒子色彩隨機混合：撞擊白光、淡金破片、雙方子彈顏色
+      const rand = Math.random();
+      let color = 0xffffff;
+      if (rand < 0.35) color = 0xfffae0;
+      else if (rand < 0.65) color = colorA;
+      else if (rand < 0.9) color = colorB;
+
+      this.particlePool.items[idx].init(
+        x,
+        y,
+        Math.cos(angle) * speed,
+        Math.sin(angle) * speed,
+        color,
+        radius,
+        life,
+        0.87,
+      );
+    }
+  }
+
   private findTankById(id: number): Tank | null {
     const len = this.allTanks.length;
     for (let i = 0; i < len; i++) {
@@ -581,8 +633,10 @@ export class Game {
 
   public destroy(): void {
     this.loop.stop();
-    window.removeEventListener('resize', this.onResizeBound);
-    window.removeEventListener('keydown', this.onKeyDownBound);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('resize', this.onResizeBound);
+      window.removeEventListener('keydown', this.onKeyDownBound);
+    }
     this.inputManager.detach();
     this.hud.destroy();
     this.gridRenderer.destroy();

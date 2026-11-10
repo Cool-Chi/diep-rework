@@ -37,6 +37,25 @@ export class AISystem {
       const bot = aiTanks[i];
       if (!bot.active) continue;
 
+      if (bot.name === 'Target Dummy') {
+        // 沙盒測試靶機：定點錨定於玩家前方 360 單位，持續朝向玩家射擊供測試子彈相消與偏折
+        const player = allTanks[0];
+        bot.vx = 0;
+        bot.vy = 0;
+        bot.x = player.x + 360;
+        bot.y = player.y;
+        bot.prevX = bot.x;
+        bot.prevY = bot.y;
+        bot.input.moveX = 0;
+        bot.input.moveY = 0;
+        bot.input.aimX = player.x;
+        bot.input.aimY = player.y;
+        bot.input.shooting = true;
+        bot.rotation = Math.atan2(player.y - bot.y, player.x - bot.x);
+        bot.prevRotation = bot.rotation;
+        continue;
+      }
+
       if (this.passiveMode) {
         bot.input.moveX = 0;
         bot.input.moveY = 0;
