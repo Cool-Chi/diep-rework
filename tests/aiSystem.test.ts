@@ -183,4 +183,53 @@ describe('Milestone 5: AISystem (Tactical Bot Decision & Combat)', () => {
     expect(bot.input.moveY).toBe(0);
     expect(bot.input.shooting).toBe(false);
   });
+
+  it('transitions from retreating back to farming after MIN_RETREAT_TICKS when threats have cleared', () => {
+    const aiSystem = new AISystem();
+    const bot = new Tank(1001, 1000, 1000);
+    bot.isAi = true;
+    bot.active = true;
+    bot.maxHp = 100;
+    bot.hp = 30; // 30% (< 35%) -> trigger retreat
+    bot.aiState = 'retreating';
+    bot.aiStateTimer = 46; // > MIN_RETREAT_TICKS (45)
+
+    // 無任何敵人在 THREAT_ESCAPE_RADIUS (700) 內
+    const distantEnemy = new Tank(1, 3000, 3000);
+    distantEnemy.active = true;
+
+    const shapes: Shape[] = [];
+    const allTanks = [distantEnemy, bot];
+    const bulletPool = new ObjectPool<Bullet>(16, () => new Bullet());
+
+    aiSystem.update([bot], shapes, allTanks, bulletPool, 1);
+
+    expect(bot.aiState).toBe('farming');
+    expect(bot.aiTargetId).toBe(-1);
+  });
+
+  it('dynamically retargets to immediate closer threats during combat', () => {
+    const aiSystem = new AISystem();
+    const bot = new Tank(1001, 1000, 1000);
+    bot.isAi = true;
+    bot.active = true;
+    bot.aiState = 'engaging';
+
+    const distantTarget = new Tank(1, 1450, 1000); // 距離 450
+    distantTarget.active = true;
+    bot.aiTargetId = distantTarget.id;
+
+    const immediateThreat = new Tank(2, 1150, 1000); // 距離 150 (< 300 且 450 - 150 = 300 > 120)
+    immediateThreat.active = true;
+
+    const shapes: Shape[] = [];
+    const allTanks = [distantTarget, immediateThreat, bot];
+    const bulletPool = new ObjectPool<Bullet>(16, () => new Bullet());
+
+    aiSystem.update([bot], shapes, allTanks, bulletPool, 1);
+
+    // 應該自動切換鎖定更具威脅的近距離目標
+    expect(bot.aiTargetId).toBe(immediateThreat.id);
+    expect(bot.input.aimX).toBeCloseTo(1150, 0);
+  });
 });

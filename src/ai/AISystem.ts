@@ -87,7 +87,7 @@ export class AISystem {
       return;
     }
 
-    // B. 逃逸復原判斷 (至少維持 MIN_RETREAT_TICKS 且 HP > 60% 或威脅已遠離)
+    // B. 逃逸復原判斷 (至少維持 MIN_RETREAT_TICKS 且威脅已遠離或 HP 回復至 60%)
     if (bot.aiState === 'retreating') {
       if (bot.aiStateTimer >= MIN_RETREAT_TICKS) {
         const nearestEnemy = this.findNearestEnemyTank(
@@ -95,9 +95,16 @@ export class AISystem {
           allTanks,
           THREAT_ESCAPE_RADIUS,
         );
-        if (hpRatio >= 0.6 || !nearestEnemy) {
-          bot.aiState = nearestEnemy ? 'engaging' : 'farming';
+        if (!nearestEnemy) {
+          // 周圍已無敵對威脅，立即重回 FARMING 發育邊農邊回血，徹底解除殭屍漂移鎖
+          bot.aiState = 'farming';
           bot.aiStateTimer = 0;
+          bot.aiTargetId = -1;
+        } else if (hpRatio >= 0.6) {
+          // 敵方仍在警戒區但自身血量已回復至 60% 以上，轉為反打
+          bot.aiState = 'engaging';
+          bot.aiStateTimer = 0;
+          bot.aiTargetId = nearestEnemy.id;
         }
       }
       return;
@@ -156,6 +163,10 @@ export class AISystem {
 
     if (!shape) {
       shape = this.findNearestShape(bot, shapes, 600);
+      if (!shape) {
+        // 若 600 範圍內無形狀，擴展視野至 1200 單位主動搜尋靠攏
+        shape = this.findNearestShape(bot, shapes, 1200);
+      }
       if (shape) {
         bot.aiTargetShapeId = shape.id;
         bot.aiTargetStickinessTimer = 0;
@@ -214,9 +225,23 @@ export class AISystem {
       bot.aiTargetId = target.id;
     }
 
-    const dx = target.x - bot.x;
-    const dy = target.y - bot.y;
-    const distToTarget = Math.sqrt(dx * dx + dy * dy);
+    let dx = target.x - bot.x;
+    let dy = target.y - bot.y;
+    let distToTarget = Math.sqrt(dx * dx + dy * dy);
+
+    // 動態近迫威脅換鎖：若有其他敵對坦克距離自身 < 300 且比當前目標近 120 單位以上，優先轉火應對近迫威脅
+    const nearest = this.findNearestEnemyTank(bot, allTanks, PERCEPTION_RADIUS);
+    if (nearest && nearest.id !== target.id) {
+      const nearestDist = this.dist(bot, nearest);
+      if (nearestDist < 300 && distToTarget - nearestDist > 120) {
+        target = nearest;
+        bot.aiTargetId = nearest.id;
+        dx = target.x - bot.x;
+        dy = target.y - bot.y;
+        distToTarget = nearestDist;
+      }
+    }
+
     if (distToTarget <= 0.0001) return;
 
     const nx = dx / distToTarget;

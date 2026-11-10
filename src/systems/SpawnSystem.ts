@@ -125,7 +125,7 @@ export class SpawnSystem {
     forcedClass?: TankClassId,
   ): void {
     // 1. 隨機生成遠離避免點 (如玩家) 的座標
-    const spawnPos = this.getRandomSpawnPosition(avoidX, avoidY);
+    const spawnPos = this.getRandomSpawnPosition(avoidX, avoidY, bot.id);
     bot.respawn(spawnPos.x, spawnPos.y);
 
     // 2. 決定 AI 等級與職業梯隊
@@ -226,86 +226,66 @@ export class SpawnSystem {
   private getRandomSpawnPosition(
     avoidX: number,
     avoidY: number,
+    selfBotId?: number,
   ): { x: number; y: number } {
-    const margin = 200;
-    const cornerSize = 900;
-    const centerAvoidSq = 700 * 700; // 嚴禁生成在地圖中央 (2000, 2000) 700 單位以內
-    const playerAvoidSq = 500 * 500;
+    const margin = 250;
+    const centerAvoidSq = 600 * 600; // 避免中央五邊形巢穴
+    const playerAvoidSq = 550 * 550; // 避免與玩家過近
+    const botAvoidSq = 450 * 450; // 避免與既有活動 AI 扎堆重生 (防止同區域群聚)
 
-    for (let attempts = 0; attempts < 15; attempts++) {
-      let rx = 0;
-      let ry = 0;
+    let bestX = margin + Math.random() * (MAP_SIZE - margin * 2);
+    let bestY = margin + Math.random() * (MAP_SIZE - margin * 2);
+    let bestMinDistSq = -1;
 
-      // 75% 機率優先生成於地圖四角安全區
-      if (Math.random() < 0.75) {
-        const cornerIdx = Math.floor(Math.random() * 4);
-        switch (cornerIdx) {
-          case 0: // 左上 (NW)
-            rx = margin + Math.random() * cornerSize;
-            ry = margin + Math.random() * cornerSize;
-            break;
-          case 1: // 右上 (NE)
-            rx = MAP_SIZE - margin - Math.random() * cornerSize;
-            ry = margin + Math.random() * cornerSize;
-            break;
-          case 2: // 左下 (SW)
-            rx = margin + Math.random() * cornerSize;
-            ry = MAP_SIZE - margin - Math.random() * cornerSize;
-            break;
-          default:
-            rx = MAP_SIZE - margin - Math.random() * cornerSize;
-            ry = MAP_SIZE - margin - Math.random() * cornerSize;
-            break;
-        }
-      } else {
-        // 25% 生成於外圍邊緣環帶 (距邊緣 200 ~ 800)
-        const side = Math.floor(Math.random() * 4);
-        if (side === 0) {
-          rx = margin + Math.random() * (MAP_SIZE - margin * 2);
-          ry = margin + Math.random() * 600;
-        } else if (side === 1) {
-          rx = margin + Math.random() * (MAP_SIZE - margin * 2);
-          ry = MAP_SIZE - margin - Math.random() * 600;
-        } else if (side === 2) {
-          rx = margin + Math.random() * 600;
-          ry = margin + Math.random() * (MAP_SIZE - margin * 2);
-        } else {
-          rx = MAP_SIZE - margin - Math.random() * 600;
-          ry = margin + Math.random() * (MAP_SIZE - margin * 2);
-        }
-      }
+    // 全圖均勻泊松盤取樣（最多嘗試 30 次篩選安全點）
+    for (let attempts = 0; attempts < 30; attempts++) {
+      const rx = margin + Math.random() * (MAP_SIZE - margin * 2);
+      const ry = margin + Math.random() * (MAP_SIZE - margin * 2);
 
-      // 檢查是否遠離避開點（玩家）
-      const pdx = rx - avoidX;
-      const pdy = ry - avoidY;
-      if (pdx * pdx + pdy * pdy < playerAvoidSq) continue;
-
-      // 檢查是否遠離地圖正中央
+      // 1. 檢查是否遠離地圖正中央五邊形巢穴
       const cdx = rx - MAP_SIZE * 0.5;
       const cdy = ry - MAP_SIZE * 0.5;
       if (cdx * cdx + cdy * cdy < centerAvoidSq) continue;
 
-      return { x: rx, y: ry };
-    }
+      // 2. 檢查是否遠離避開點（玩家）
+      const pdx = rx - avoidX;
+      const pdy = ry - avoidY;
+      const pDistSq = pdx * pdx + pdy * pdy;
+      if (pDistSq < playerAvoidSq) continue;
 
-    // 備用方案：選取距離 avoidX, avoidY 最遠的一個角落
-    const candidates = [
-      { x: 300, y: 300 },
-      { x: MAP_SIZE - 300, y: 300 },
-      { x: 300, y: MAP_SIZE - 300 },
-      { x: MAP_SIZE - 300, y: MAP_SIZE - 300 },
-    ];
-    let best = candidates[0];
-    let maxDistSq = -1;
-    for (let i = 0; i < candidates.length; i++) {
-      const c = candidates[i];
-      const d2 = (c.x - avoidX) ** 2 + (c.y - avoidY) ** 2;
-      if (d2 > maxDistSq) {
-        maxDistSq = d2;
-        best = c;
+      // 3. 檢查是否遠離其他活動 AI（防扎堆堆疊）
+      let closestDistSq = pDistSq;
+      let tooCloseToBot = false;
+
+      for (let i = 0; i < this.aiTanks.length; i++) {
+        const other = this.aiTanks[i];
+        if (!other.active || other.id === selfBotId) continue;
+
+        const bdx = rx - other.x;
+        const bdy = ry - other.y;
+        const bDistSq = bdx * bdx + bdy * bdy;
+        if (bDistSq < closestDistSq) {
+          closestDistSq = bDistSq;
+        }
+        if (bDistSq < botAvoidSq) {
+          tooCloseToBot = true;
+          break;
+        }
+      }
+
+      if (closestDistSq > bestMinDistSq) {
+        bestMinDistSq = closestDistSq;
+        bestX = rx;
+        bestY = ry;
+      }
+
+      if (!tooCloseToBot) {
+        return { x: rx, y: ry };
       }
     }
-    return best;
+
+    // 若多次取樣未能滿足嚴格互斥條件，選取與最近實體距離最大之候選點
+    return { x: bestX, y: bestY };
   }
 
   private isQueued(bot: Tank): boolean {

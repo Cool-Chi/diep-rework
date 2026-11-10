@@ -65,7 +65,7 @@ export class FireSystem {
         tank.invulnerableTicks = 0;
       }
 
-      // AI 射擊門檻：若砲管正處於大幅度轉向（夾角大於約 35 度）且非逃逸加速，暫緩開火
+      // AI 射擊門檻：若砲管正處於大幅度轉向（夾角大於約 48 度）且非逃逸加速，暫緩開火
       if (tank.isAi && tank.aiState !== 'retreating') {
         const aimDx = tank.input.aimX - tank.x;
         const aimDy = tank.input.aimY - tank.y;
@@ -73,7 +73,7 @@ export class FireSystem {
         let delta = targetAngle - tank.rotation;
         while (delta > Math.PI) delta -= Math.PI * 2;
         while (delta < -Math.PI) delta += Math.PI * 2;
-        if (Math.abs(delta) > 0.6) {
+        if (Math.abs(delta) > 0.85) {
           return;
         }
       }

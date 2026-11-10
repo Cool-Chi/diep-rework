@@ -104,4 +104,30 @@ describe('Milestone 5: SpawnSystem (AI Ecosystem & Tier Scaling)', () => {
       expect(dist).toBeGreaterThanOrEqual(400);
     }
   });
+
+  it('distributes AI tanks across map quadrants without clustering in a single corner', () => {
+    const spawnSystem = new SpawnSystem();
+    const player = new Tank(1, 2000, 2000);
+    spawnSystem.init(player);
+
+    // 檢查 20 隻 AI 坦克的空間覆蓋度
+    // 統計落在四個象限的數量，各象限均應有分布，不得全數擠在單一角落
+    const quadrants = [0, 0, 0, 0];
+    for (let i = 0; i < spawnSystem.aiTanks.length; i++) {
+      const bot = spawnSystem.aiTanks[i];
+      const qX = bot.x >= 2000 ? 1 : 0;
+      const qY = bot.y >= 2000 ? 1 : 0;
+      const qIdx = qY * 2 + qX;
+      quadrants[qIdx]++;
+    }
+
+    // 至少有 3 個象限具備生成的 AI（高度均勻分布）
+    const populatedQuadrants = quadrants.filter((q) => q > 0).length;
+    expect(populatedQuadrants).toBeGreaterThanOrEqual(3);
+
+    // 單一象限最多不得超過 14 隻（杜絕極端堆積）
+    for (const count of quadrants) {
+      expect(count).toBeLessThanOrEqual(14);
+    }
+  });
 });
