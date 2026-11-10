@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { TankClassId } from '../src/config/tanks.config';
 import { EventBus } from '../src/core/EventBus';
 import { ObjectPool } from '../src/core/ObjectPool';
 import { Bullet } from '../src/entities/Bullet';
