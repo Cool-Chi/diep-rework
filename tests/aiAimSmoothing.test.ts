@@ -5,11 +5,14 @@ import { ObjectPool } from '../src/core/ObjectPool';
 import { Bullet } from '../src/entities/Bullet';
 import { Shape } from '../src/entities/Shape';
 import { Tank } from '../src/entities/Tank';
+import { PhysicsWorld } from '../src/physics/PhysicsWorld';
+import { interpolateAngle } from '../src/rendering/MultiTankRenderer';
 import { FireSystem } from '../src/systems/FireSystem';
 
 describe('AI Aim Smoothing & Decision Polish (M5)', () => {
-  it('AI aim direction turns smoothly with bounded angular turn rate', () => {
+  it('AI aim direction turns smoothly with bounded angular turn rate and is not overwritten by PhysicsWorld', () => {
     const fireSystem = new FireSystem();
+    const physics = new PhysicsWorld();
     const bulletPool = new ObjectPool<Bullet>(16, () => new Bullet());
 
     const bot = new Tank(1001, 200, 200);
@@ -20,12 +23,39 @@ describe('AI Aim Smoothing & Decision Polish (M5)', () => {
     bot.input.aimX = 200;
     bot.input.aimY = 50;
 
+    // 1. 射擊系統依角速度限制平滑旋轉
     fireSystem.updateTankFiring(bot, bulletPool);
 
-    // 1 tick 轉動的角度絕對值應小於或等於 AI_MAX_TURN_RATE_PER_TICK + epsilon
-    const angleDelta = Math.abs(bot.rotation - 0);
-    expect(angleDelta).toBeLessThanOrEqual(AI_MAX_TURN_RATE_PER_TICK + 0.001);
-    expect(angleDelta).toBeGreaterThan(0.05); // 確實朝目標轉動
+    const angleAfterFire = bot.rotation;
+    expect(Math.abs(angleAfterFire - 0)).toBeLessThanOrEqual(
+      AI_MAX_TURN_RATE_PER_TICK + 0.001,
+    );
+    expect(Math.abs(angleAfterFire - 0)).toBeGreaterThan(0.05);
+
+    // 2. 物理步進絕不得覆寫 tank.rotation 為瞬移的 -PI/2
+    physics.stepTank(bot);
+    expect(bot.rotation).toBe(angleAfterFire);
+  });
+
+  it('Tank prepareStep() correctly tracks prevRotation for render interpolation', () => {
+    const bot = new Tank(1001, 200, 200);
+    bot.rotation = 1.25;
+    bot.prepareStep();
+
+    expect(bot.prevRotation).toBe(1.25);
+
+    bot.rotation = 1.45;
+    expect(bot.prevRotation).toBe(1.25);
+  });
+
+  it('interpolateAngle smoothly calculates shortest arc without 360 degree spin around boundary', () => {
+    // 跨越 PI 與 -PI 邊界 (3.1 rad 到 -3.1 rad)
+    const mid = interpolateAngle(3.1, -3.1, 0.5);
+    // 兩者角距離僅 0.083 弧度，中間值應在正負 PI 附近，而非繞大圈至 0
+    expect(Math.abs(mid)).toBeGreaterThan(3.0);
+
+    // 正常區間插值 (0 到 1.0，alpha = 0.5)
+    expect(interpolateAngle(0, 1.0, 0.5)).toBeCloseTo(0.5, 5);
   });
 
   it('AI farming maintains target stickiness avoiding rapid jitter between equidistant shapes', () => {

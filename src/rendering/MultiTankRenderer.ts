@@ -20,6 +20,21 @@ interface TankRenderItem {
 }
 
 /**
+ * 角度最短弧度插值 (Shortest Arc Angular Interpolation)
+ * 確保在 -PI ~ PI 週期邊界處沿最短路徑平滑過渡（零 GC）
+ */
+export function interpolateAngle(
+  from: number,
+  to: number,
+  alpha: number,
+): number {
+  let diff = to - from;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return from + diff * alpha;
+}
+
+/**
  * 多坦克集中渲染器 (MultiTankRenderer)
  * 預先配置 32 個渲染項目池，嚴格實施視錐剔除 (isInBounds) 與零 GC 物件複用，
  * 同時支援頭頂擬真暱稱與除錯戰術標籤。
@@ -136,10 +151,10 @@ export class MultiTankRenderer {
         item.nameText.text = tank.name;
       }
 
-      // 4. 計算砲管世界朝向角度（AI 使用平滑旋轉後的 tank.rotation，玩家即時跟隨滑鼠）
+      // 4. 計算砲管世界朝向角度（AI 使用渲染幀插值後的平滑角度，玩家即時跟隨滑鼠）
       let aimAngle: number;
       if (tank.isAi) {
-        aimAngle = tank.rotation;
+        aimAngle = interpolateAngle(tank.prevRotation, tank.rotation, alpha);
       } else {
         const aimDx = tank.input.aimX - rx;
         const aimDy = tank.input.aimY - ry;

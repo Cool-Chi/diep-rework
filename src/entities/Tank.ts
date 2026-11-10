@@ -53,6 +53,7 @@ export class Tank {
   public vy = 0;
   public radius: number;
   public rotation = 0; // 砲管/本體朝向（弧度）
+  public prevRotation = 0; // 上一模擬 tick 砲管朝向（供高刷渲染插值）
 
   // 等級與技能點狀態
   public level = 1;
@@ -142,6 +143,8 @@ export class Tank {
     this.active = true;
     this.invulnerableTicks = SPAWN_INVULNERABLE_TICKS;
     this.lastBodyContactTick = 0;
+    this.rotation = 0;
+    this.prevRotation = 0;
     this.resetBarrelCooldowns();
   }
 
@@ -157,10 +160,11 @@ export class Tank {
   }
 
   /**
-   * 每個模擬 tick 開始前先將當前座標拷貝至上一 tick 座標，供渲染插值
+   * 每個模擬 tick 開始前先將當前座標與朝向拷貝至上一 tick 座標，供渲染插值
    */
   public prepareStep(): void {
     this.prevX = this.x;
     this.prevY = this.y;
+    this.prevRotation = this.rotation;
   }
 }

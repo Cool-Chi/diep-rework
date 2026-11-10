@@ -75,14 +75,7 @@ export class PhysicsWorld {
     tank.x += tank.vx;
     tank.y += tank.vy;
 
-    // 5. 朝向旋轉更新（朝向瞄準點）
-    const dx = tank.input.aimX - tank.x;
-    const dy = tank.input.aimY - tank.y;
-    if (dx * dx + dy * dy > 0.001) {
-      tank.rotation = Math.atan2(dy, dx);
-    }
-
-    // 6. 邊界約束（圓形 vs 邊界線段）與反彈處理
+    // 5. 邊界約束（圓形 vs 邊界線段）與反彈處理
     const r = tank.radius;
 
     // 左邊界
