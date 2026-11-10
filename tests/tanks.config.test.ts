@@ -55,7 +55,7 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
     expect(SNIPER_TANK_DEFINITION.fovMultiplier).toBe(1.111);
     expect(SNIPER_TANK_DEFINITION.barrels).toHaveLength(1);
     const b = SNIPER_TANK_DEFINITION.barrels[0];
-    expect(b.length).toBe(70);
+    expect(b.length).toBe(60);
     expect(b.bulletSpeedMultiplier).toBe(1.5);
     expect(b.reloadMultiplier).toBe(1.5);
   });
@@ -170,7 +170,7 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
   it('configures Tier 3 combat specs: Assassin FOV 1.25 and Destroyer width 36 & recoil 3.5', () => {
     const assassin = TANKS_CONFIG.assassin;
     expect(assassin.fovMultiplier).toBe(1.25);
-    expect(assassin.barrels[0].length).toBe(82);
+    expect(assassin.barrels[0].length).toBe(70);
     expect(assassin.barrels[0].bulletSpeedMultiplier).toBe(1.6);
 
     const destroyer = TANKS_CONFIG.destroyer;
@@ -213,11 +213,17 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
   });
 
   it('configures Tier 4 combat specs accurately', () => {
-    // Ranger
+    // Ranger (砲管 0 為梯形裝飾套筒，砲管 1 為長度 70 之主狙擊管)
     const ranger = TANKS_CONFIG.ranger;
     expect(ranger.fovMultiplier).toBe(1.428);
-    expect(ranger.barrels[0].length).toBe(95);
-    expect(ranger.barrels[0].bulletSpeedMultiplier).toBe(1.8);
+    expect(ranger.barrels).toHaveLength(2);
+    expect(ranger.barrels[0].isCosmetic).toBe(true);
+    expect(ranger.barrels[0].length).toBe(34);
+    expect(ranger.barrels[0].width).toBe(30);
+    expect(ranger.barrels[0].tipWidth).toBe(18);
+    expect(ranger.barrels[1].length).toBe(70);
+    expect(ranger.barrels[1].width).toBe(18);
+    expect(ranger.barrels[1].bulletSpeedMultiplier).toBe(1.8);
 
     // Annihilator
     const annihilator = TANKS_CONFIG.annihilator;

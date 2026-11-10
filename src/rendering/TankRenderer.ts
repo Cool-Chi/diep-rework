@@ -15,6 +15,7 @@ import {
 interface BarrelSlot {
   container: Container;
   graphics: Graphics;
+  maxSafeRecoil: number;
 }
 
 /**
@@ -47,6 +48,7 @@ export class TankRenderer {
       this.barrelSlots.push({
         container: slotContainer,
         graphics: slotGraphics,
+        maxSafeRecoil: 20,
       });
     }
 
@@ -91,15 +93,25 @@ export class TankRenderer {
         slot.container.rotation = theta;
         slot.graphics.position.set(0, 0);
 
-        // 局部未旋轉座標系：底座在 x=0，砲口延伸至 x=L
-        const x0 = 0;
-        const y0 = -wBase * 0.5;
+        const halfW = wBase * 0.5;
+        // 計算砲管底座在底盤圓內的弦長邊界臨界值 (防止超寬砲管如 Annihilator 在後座力收縮時尾部稜角穿透底盤圓露出)
+        const chordSq = radius * radius - halfW * halfW;
+        const xChord = chordSq > 0 ? Math.sqrt(chordSq) : 0;
+        // 若砲管寬度逼近底盤直徑 (xChord < 14)，將底座起點往 +X 前推適度位移，確保靜止與極限後座時均 100% 收納於底盤圓內
+        const xBase =
+          xChord < 14 ? Math.min(4.0, Math.max(0, xChord - 1.5)) : 0;
+        slot.maxSafeRecoil =
+          xChord > 0 ? Math.max(0, xBase + xChord - 1.0) : 20.0;
+
+        // 局部未旋轉座標系：底座起點在 x=xBase，砲口延伸至 x=L
+        const x0 = xBase;
+        const y0 = -halfW;
         const x1 = L;
         const y1 = -wTip * 0.5;
         const x2 = L;
         const y2 = wTip * 0.5;
-        const x3 = 0;
-        const y3 = wBase * 0.5;
+        const x3 = xBase;
+        const y3 = halfW;
 
         slot.graphics.clear();
         slot.graphics
@@ -142,9 +154,11 @@ export class TankRenderer {
     if (recoils) {
       const len = this.barrelSlots.length;
       for (let b = 0; b < len; b++) {
-        if (!this.barrelSlots[b].container.visible) break;
+        const slot = this.barrelSlots[b];
+        if (!slot.container.visible) break;
         const rec = recoils[b] || 0;
-        this.barrelSlots[b].graphics.position.x = -rec;
+        const safeRec = Math.min(rec, slot.maxSafeRecoil);
+        slot.graphics.position.x = -safeRec;
       }
     }
   }

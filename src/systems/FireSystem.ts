@@ -91,6 +91,18 @@ export class FireSystem {
         if (tank.barrelCooldowns[b] <= 0) {
           const barrel = barrels[b];
 
+          // 若為純外觀裝飾套筒 (isCosmetic)，不生成子彈、不施加物理衝量，但觸發視覺後座力收縮與裝填冷卻
+          if (barrel.isCosmetic) {
+            tank.barrelRecoils[b] =
+              BASE_BARREL_RECOIL_OFFSET * Math.sqrt(barrel.recoilMultiplier);
+            const bReload = Math.max(
+              1,
+              Math.round(reloadTicks * barrel.reloadMultiplier),
+            );
+            tank.barrelCooldowns[b] = bReload;
+            continue;
+          }
+
           // 計算砲管絕對朝向角與散射角
           const totalAngle = tank.rotation + barrel.angle;
           const spreadOffset =

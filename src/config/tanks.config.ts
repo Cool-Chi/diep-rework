@@ -20,6 +20,7 @@ export interface BarrelConfig {
   bulletPenMultiplier: number;
   bulletSizeMultiplier: number;
   bulletLifespanTicks?: number; // 子彈飛行壽命 (ticks，未填則使用預設 BULLET_LIFESPAN_TICKS = 75)
+  isCosmetic?: boolean; // 若為 true，純視覺/套筒裝飾，不發射實體子彈且不施加反作用力
 }
 
 export type TankClassId =
@@ -148,7 +149,7 @@ export const SNIPER_TANK_DEFINITION: TankDefinition = {
   evolutions: ['assassin', 'hunter'],
   barrels: [
     {
-      length: 70, // 砲管延伸至 70 單位 (基準身管 50 的 1.4 倍)
+      length: 60, // 砲管延伸至 60 單位 (基準身管 50 的 1.2 倍)
       width: BASE_BARREL_WIDTH,
       offsetX: 0,
       offsetY: 0,
@@ -323,7 +324,7 @@ export const ASSASSIN_TANK_DEFINITION: TankDefinition = {
   evolutions: ['ranger'],
   barrels: [
     {
-      length: 82, // 砲管延伸至 82 單位
+      length: 70, // 砲管延伸至 70 單位 (基準身管 50 的 1.4 倍，對齊原版)
       width: BASE_BARREL_WIDTH,
       offsetX: 0,
       offsetY: 0,
@@ -1056,8 +1057,28 @@ export const RANGER_TANK_DEFINITION: TankDefinition = {
   parentClassId: 'assassin',
   evolutions: [],
   barrels: [
+    // 砲管 0: 梯形底座銜接套筒 (底座 30 單位收束至 18 單位對齊主管，純外觀裝飾不發射子彈)
     {
-      length: 95, // 長達 95 單位極限狙擊身管
+      length: 34,
+      width: 30,
+      tipWidth: BASE_BARREL_WIDTH,
+      offsetX: 0,
+      offsetY: 0,
+      angle: 0,
+      spread: 0,
+      fireDelayRatio: 0,
+      reloadMultiplier: 1.8,
+      recoilMultiplier: 1.5,
+      isCosmetic: true,
+      bulletSpeedMultiplier: 1.0,
+      bulletDamageMultiplier: 0,
+      bulletPenMultiplier: 0,
+      bulletSizeMultiplier: 0,
+      bulletLifespanTicks: 140,
+    },
+    // 砲管 1: 主狙擊長管 (身管 70 單位，長度對齊 Assassin，自梯形套筒平滑延伸)
+    {
+      length: 70,
       width: BASE_BARREL_WIDTH,
       offsetX: 0,
       offsetY: 0,

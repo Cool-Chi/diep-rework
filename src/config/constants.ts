@@ -279,7 +279,7 @@ export const COLOR_BORDER_LINE = 0x222222; // 邊界線條色
 export const COLOR_TANK_BLUE = 0x00b2e1; // 玩家藍色本體
 export const COLOR_BARREL_GRAY = 0x999999; // 砲管灰色
 export const COLOR_STROKE = 0x555555; // 黑色/深灰輪廓線
-export const STROKE_WIDTH = 3.5; // 輪廓線寬度
+export const STROKE_WIDTH = 2.8; // 輪廓線寬度（微調至 2.8px，對齊原版最新精緻向量邊框）
 
 // 形狀色彩
 export const COLOR_SQUARE = 0xffe869; // 黃色方塊

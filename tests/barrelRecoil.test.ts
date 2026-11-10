@@ -109,4 +109,26 @@ describe('Barrel Recoil Animation & Multi-Barrel Kickback', () => {
     expect(tank.barrelRecoils[0]).toBe(0);
     expect(tank.prevBarrelRecoils[0]).toBe(0);
   });
+
+  it('handles cosmetic barrels (Ranger) without spawning bullets while triggering synced recoil', () => {
+    const fireSystem = new FireSystem();
+    const bulletPool = new ObjectPool<Bullet>(10, () => new Bullet());
+    const tank = new Tank(5, 0, 0);
+    tank.setClass(TANKS_CONFIG.ranger);
+    tank.active = true;
+    tank.input.shooting = true;
+    tank.input.aimX = 100;
+    tank.input.aimY = 0;
+
+    tank.prepareStep();
+    fireSystem.updateTankFiring(tank, bulletPool);
+
+    // 驗證只生成了 1 顆子彈 (來自 barrel 1 主砲，barrel 0 純外觀不生成子彈)
+    expect(bulletPool.getActiveCount()).toBe(1);
+
+    // 驗證兩管皆注入了後座力收縮 (同步後退動畫)
+    expect(tank.barrelRecoils[0]).toBeGreaterThan(0);
+    expect(tank.barrelRecoils[1]).toBeGreaterThan(0);
+    expect(tank.barrelRecoils[0]).toBeCloseTo(tank.barrelRecoils[1]);
+  });
 });
