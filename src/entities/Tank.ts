@@ -1,4 +1,8 @@
-import { BASE_BULLET_SPEED, BASE_TANK_RADIUS } from '../config/constants';
+import {
+  BASE_BULLET_SPEED,
+  BASE_TANK_RADIUS,
+  COLOR_TANK_BLUE,
+} from '../config/constants';
 import {
   BASIC_TANK_DEFINITION,
   type TankDefinition,
@@ -20,6 +24,17 @@ export const MAX_TANK_BARRELS = 8;
 export class Tank {
   public id: number;
   public active = true;
+
+  // 暱稱、陣營色彩與 AI 標記
+  public name = 'Player';
+  public color: number = COLOR_TANK_BLUE;
+  public isAi = false;
+
+  // AI 戰術狀態機 (包含滯後防抖計時器)
+  public aiState: 'farming' | 'engaging' | 'retreating' = 'farming';
+  public aiStateTimer = 0; // 當前狀態已維持的 ticks
+  public aiTargetId = -1; // 當前鎖定目標 ID
+  public aiStrafeDirection = 1; // 側向環繞方向 (1 或 -1)
 
   // 扁平世界座標（唯一真值，以 25 單位/格為基準）
   public x: number;

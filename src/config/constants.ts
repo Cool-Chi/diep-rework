@@ -38,6 +38,9 @@ export const WORLD_WIDTH = 4000;
 /** 世界地圖高度（世界單位，4000x4000 封閉地圖） */
 export const WORLD_HEIGHT = 4000;
 
+/** 地圖正方形尺寸（4000 世界單位） */
+export const MAP_SIZE = WORLD_WIDTH;
+
 /**
  * Lv 1 基礎坦克半徑（世界單位）
  * 原版標準：Lv 1 坦克直徑 50 單位（半徑 25 單位 = 1 個網格寬）

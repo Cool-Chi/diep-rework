@@ -24,25 +24,34 @@ export class TankRenderer {
   private readonly bodyGraphics = new Graphics();
 
   private currentClassId = '';
+  private chassisColor: number = COLOR_TANK_BLUE;
 
-  constructor(definition: TankDefinition = BASIC_TANK_DEFINITION) {
+  constructor(
+    definition: TankDefinition = BASIC_TANK_DEFINITION,
+    color: number = COLOR_TANK_BLUE,
+  ) {
+    this.chassisColor = color;
     this.barrelContainer.addChild(this.barrelGraphics);
     this.container.addChild(this.barrelContainer);
     this.container.addChild(this.bodyGraphics);
 
-    this.setDefinition(definition);
+    this.setDefinition(definition, BASE_TANK_RADIUS, color);
   }
 
   /**
-   * 切換坦克職業定義時，重新構建砲管多邊形幾何
+   * 切換坦克職業定義與底盤色彩，重新構建砲管多邊形幾何
    * （僅在轉職或重設時執行一次，熱路徑零配置）
    */
   public setDefinition(
     definition: TankDefinition,
     radius = BASE_TANK_RADIUS,
+    color: number = this.chassisColor,
   ): void {
-    if (this.currentClassId === definition.id) return;
+    if (this.currentClassId === definition.id && this.chassisColor === color) {
+      return;
+    }
     this.currentClassId = definition.id;
+    this.chassisColor = color;
 
     // 1. 繪製所有砲管
     this.barrelGraphics.clear();
@@ -96,7 +105,7 @@ export class TankRenderer {
     this.bodyGraphics.clear();
     this.bodyGraphics
       .circle(0, 0, radius)
-      .fill({ color: COLOR_TANK_BLUE })
+      .fill({ color: this.chassisColor })
       .stroke({ color: COLOR_STROKE, width: STROKE_WIDTH });
   }
 

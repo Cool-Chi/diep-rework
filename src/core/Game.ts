@@ -1,9 +1,9 @@
+import { AISystem } from '../ai/AISystem';
 import {
   BULLET_POOL_CAPACITY,
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config/constants';
-import { sizeFactor } from '../config/stats.config';
 import type { DebugOverlay } from '../debug/DebugOverlay';
 import { Bullet } from '../entities/Bullet';
 import { Tank } from '../entities/Tank';
@@ -15,6 +15,7 @@ import {
   type RenderPositionOut,
 } from '../rendering/getRenderPosition';
 import { HealthBarRenderer } from '../rendering/HealthBarRenderer';
+import { MultiTankRenderer } from '../rendering/MultiTankRenderer';
 import { Renderer } from '../rendering/Renderer';
 import { ShapeRenderer } from '../rendering/ShapeRenderer';
 import { TankRenderer } from '../rendering/TankRenderer';
@@ -23,6 +24,7 @@ import { FireSystem } from '../systems/FireSystem';
 import { LevelingSystem } from '../systems/LevelingSystem';
 import { RegenSystem } from '../systems/RegenSystem';
 import { ShapeSystem } from '../systems/ShapeSystem';
+import { SpawnSystem } from '../systems/SpawnSystem';
 import { HUD } from '../ui/HUD';
 import { Camera } from './Camera';
 import { EventBus } from './EventBus';
@@ -59,17 +61,25 @@ export class Game {
   public readonly collisionSystem = new CollisionSystem();
   public readonly levelingSystem: LevelingSystem;
   public readonly regenSystem = new RegenSystem();
+  public readonly aiSystem = new AISystem();
+  public readonly spawnSystem = new SpawnSystem();
 
   // 模擬 tick 計數
   public currentTick = 0;
+
+  // 全體活動坦克列表（包含玩家與所有 AI）
+  public readonly allTanks: Tank[] = [];
 
   // 渲染層
   public readonly gridRenderer = new GridRenderer();
   public readonly shapeRenderer = new ShapeRenderer();
   public readonly bulletRenderer = new BulletRenderer();
   public readonly tankRenderer = new TankRenderer();
+  public readonly multiTankRenderer = new MultiTankRenderer();
   public readonly healthBarRenderer = new HealthBarRenderer();
   public readonly hud: HUD;
+
+  public showAiDevLabels = false; // 是否在 AI 頭頂顯示戰術狀態標籤
 
   private readonly tempTankRenderPos: RenderPositionOut = { x: 0, y: 0 };
   private loop: GameLoop;
@@ -77,8 +87,11 @@ export class Game {
   private onResizeBound: () => void;
 
   constructor() {
+    this.playerTank.name = 'You';
+    this.allTanks.push(this.playerTank, ...this.spawnSystem.aiTanks);
+
     this.hud = new HUD(this.eventBus);
-    this.levelingSystem = new LevelingSystem(this.eventBus, [this.playerTank]);
+    this.levelingSystem = new LevelingSystem(this.eventBus, this.allTanks);
     this.inputManager.eventBus = this.eventBus;
     this.inputManager.isOverUi = (x, y) => this.hud.isOverUi(x, y);
     this.inputManager.onPointerMove = (x, y) =>
@@ -110,6 +123,11 @@ export class Game {
       }
     });
 
+    // 監聽坦克陣亡事件以觸發重生排程
+    this.eventBus.onTankDied((victimId) => {
+      this.spawnSystem.handleTankDeath(victimId, this.currentTick);
+    });
+
     this.loop = new GameLoop(this.update.bind(this));
     this.onResizeBound = this.handleResize.bind(this);
   }
@@ -134,12 +152,15 @@ export class Game {
     this.renderer.worldContainer.addChild(this.gridRenderer.container);
     this.renderer.worldContainer.addChild(this.shapeRenderer.container);
     this.renderer.worldContainer.addChild(this.bulletRenderer.container);
-    this.renderer.worldContainer.addChild(this.tankRenderer.container);
+    this.renderer.worldContainer.addChild(this.multiTankRenderer.container);
     this.renderer.worldContainer.addChild(this.healthBarRenderer.container);
 
     // 4. 掛載 HUD 介面層並設定初始佈局
     this.renderer.hudContainer.addChild(this.hud.container);
     this.hud.resize(window.innerWidth, window.innerHeight);
+
+    // 5. 初始化 AI 坦克群生成
+    this.spawnSystem.init(this.playerTank);
 
     // 5. 綁定玩家輸入監聽與 HUD 點擊事件
     this.inputManager.attach(this.renderer.app.canvas);
@@ -185,16 +206,29 @@ export class Game {
       const tickStart = performance.now();
       this.currentTick++;
 
-      // (a) 取樣輸入寫入坦克 InputCommand
+      // (a) 取樣玩家輸入寫入坦克 InputCommand
       this.inputManager.sample(this.playerTank.input, (sx, sy) =>
         this.camera.screenToWorld(sx, sy),
       );
 
-      // (b) 裝填推進、開火生成子彈與後座力衝量
-      this.fireSystem.updateTankFiring(this.playerTank, this.bulletPool);
+      // (a2) AI 決策系統計算各 AI 坦克的 InputCommand
+      this.aiSystem.update(
+        this.spawnSystem.aiTanks,
+        this.shapeSystem.shapes,
+        this.allTanks,
+        this.bulletPool,
+        this.currentTick,
+      );
 
-      // (c) 坦克物理模擬積分（含 prepareStep 備份座標、移動加速度、阻尼與邊界約束）
-      this.physics.stepTank(this.playerTank);
+      // (b & c) 全體活動坦克裝填推進、開火生成子彈與物理步進積分
+      const tankCount = this.allTanks.length;
+      for (let t = 0; t < tankCount; t++) {
+        const tank = this.allTanks[t];
+        if (tank.active) {
+          this.fireSystem.updateTankFiring(tank, this.bulletPool);
+          this.physics.stepTank(tank);
+        }
+      }
 
       // (d) 子彈步進推進與壽命衰減
       this.fireSystem.updateBullets(this.bulletPool);
@@ -208,9 +242,9 @@ export class Game {
         visibleBounds.maxY,
       ]);
 
-      // (f) 碰撞檢測與物理結算 (SpatialHash + Swept + 扣血)
+      // (f) 碰撞檢測與物理結算 (包含玩家、所有 AI 與形狀、子彈)
       this.collisionSystem.update(
-        [this.playerTank],
+        this.allTanks,
         this.bulletPool,
         this.shapeSystem.shapes,
         this.shapeSystem,
@@ -219,7 +253,10 @@ export class Game {
       );
 
       // (g) 自然生命恢復與 30 秒加速回血
-      this.regenSystem.update([this.playerTank], this.currentTick);
+      this.regenSystem.update(this.allTanks, this.currentTick);
+
+      // (g2) AI 坦克生態動態維持與重生佇列
+      this.spawnSystem.update(this.currentTick, this.playerTank);
 
       const tickDuration = performance.now() - tickStart;
 
@@ -235,8 +272,8 @@ export class Game {
     // ② 計算 alpha
     // ③ Camera.update（使用插值後的坦克位置）
     // ④ 套用 worldContainer 變換
-    // ⑤ 更新世界內所有 Sprite（含血條）
-    // ⑥ 更新 HUD（小地圖、分數列等）
+    // ⑤ 更新世界內所有 Sprite（多坦克、形狀、子彈、血條）
+    // ⑥ 更新 HUD（排行榜、小地圖、分數列等）
     // ⑦ render
     // ========================================================
 
@@ -256,33 +293,40 @@ export class Game {
     // ④ 套用 worldContainer 變換（確保後續更新與視錐剔除使用當幀最新相機狀態）
     this.renderer.updateCamera(this.camera);
 
-    // ⑤ 更新世界內所有 Sprite（含血條，均在世界座標下計算）
+    // ⑤ 更新世界內所有 Sprite（多坦克、形狀、子彈與血條）
     const renderStartTime = performance.now();
     const mouseWorld = this.camera.screenToWorld(
       this.inputManager.mouseScreenX,
       this.inputManager.mouseScreenY,
     );
-    const aimAngle = Math.atan2(mouseWorld.y - renderY, mouseWorld.x - renderX);
+    this.playerTank.input.aimX = mouseWorld.x;
+    this.playerTank.input.aimY = mouseWorld.y;
 
-    this.tankRenderer.update(
-      renderX,
-      renderY,
-      aimAngle,
-      sizeFactor(this.playerTank.level),
+    this.multiTankRenderer.update(
+      this.allTanks,
+      alpha,
+      visibleBounds,
+      this.showAiDevLabels,
     );
     this.shapeRenderer.update(this.shapeSystem.shapes, alpha, visibleBounds);
     this.bulletRenderer.update(this.bulletPool, alpha, visibleBounds);
     this.healthBarRenderer.update(
-      [this.playerTank],
+      this.allTanks,
       this.shapeSystem.shapes,
       alpha,
       visibleBounds,
     );
     const renderDuration = performance.now() - renderStartTime;
 
-    // ⑥ 更新 HUD（小地圖、分數列等，小地圖玩家點使用插值渲染位置）
+    // ⑥ 更新 HUD（排行榜、小地圖、分數列等）
     const hudStartTime = performance.now();
-    this.hud.update(this.playerTank, alpha, this.camera, dtSeconds);
+    this.hud.update(
+      this.playerTank,
+      alpha,
+      this.camera,
+      dtSeconds,
+      this.allTanks,
+    );
     const hudDuration = performance.now() - hudStartTime;
 
     // ⑦ render（由 Pixi Application 渲染循環在幀末自動執行）

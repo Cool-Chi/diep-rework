@@ -210,6 +210,9 @@ export class DebugOverlay {
       <div>HP: <b>${Math.ceil(tank.hp)}</b>/${tank.maxHp} | Reload: <b>${tank.reloadTicks}t</b> | BulletSpd: <b>${tank.bulletSpeed.toFixed(2)}</b></div>
       <div>BulletHP: <b>${tank.bulletHp}</b> | BulletDmg: <b>${tank.bulletDamage}</b> | Radius: <b>${tank.radius.toFixed(1)}</b> | FOV: <b>${fovVal}</b></div>
       <div style="border-top:1px dashed rgba(255,255,255,0.15);margin:4px 0;padding-top:4px;">
+        Active AI: <b style="color:#00ff88">${this.game.spawnSystem.getActiveAiCount()}</b>/20 | AI Passive: <b style="color:${this.game.aiSystem.passiveMode ? '#ffbb00' : '#00ff88'}">${this.game.aiSystem.passiveMode ? 'ON' : 'OFF'}</b>
+      </div>
+      <div>
         Pressed Keys: <b style="color:#ffff00">${pressedStr}</b>
       </div>
       <div>Shapes Destroyed: <b>${this.shapeDestroyedCount}</b> | Tank Deaths: <b>${this.tankDiedCount}</b></div>
@@ -525,6 +528,91 @@ export class DebugOverlay {
     );
     stressBtn.style.gridColumn = 'span 2';
     btnContainer.appendChild(stressBtn);
+
+    // AI 測試與調參控制按鈕組
+    const toggleAiPassiveBtn = createBtn(
+      'Toggle AI Passive',
+      () => {
+        this.game.aiSystem.passiveMode = !this.game.aiSystem.passiveMode;
+        this.renderMetrics();
+      },
+      '#7b2cbf',
+    );
+    btnContainer.appendChild(toggleAiPassiveBtn);
+
+    const toggleAiLabelsBtn = createBtn(
+      'Toggle AI Labels',
+      () => {
+        this.game.showAiDevLabels = !this.game.showAiDevLabels;
+        this.renderMetrics();
+      },
+      '#5a189a',
+    );
+    btnContainer.appendChild(toggleAiLabelsBtn);
+
+    const respawnAiBtn = createBtn(
+      'Respawn 20 AI',
+      () => {
+        this.game.spawnSystem.init(this.game.playerTank);
+        this.renderMetrics();
+      },
+      '#3f37c9',
+    );
+    btnContainer.appendChild(respawnAiBtn);
+
+    const clearAiBtn = createBtn(
+      'Clear All AI',
+      () => {
+        this.game.spawnSystem.clearAllAi();
+        this.renderMetrics();
+      },
+      '#9d0208',
+    );
+    btnContainer.appendChild(clearAiBtn);
+
+    const spawnDestroyerAiBtn = createBtn(
+      'Spawn AI: Destroyer',
+      () => {
+        for (let i = 0; i < this.game.spawnSystem.aiTanks.length; i++) {
+          const bot = this.game.spawnSystem.aiTanks[i];
+          if (!bot.active) {
+            this.game.spawnSystem.spawnAiTank(
+              bot,
+              30,
+              this.game.playerTank.x,
+              this.game.playerTank.y,
+              'destroyer',
+            );
+            break;
+          }
+        }
+        this.renderMetrics();
+      },
+      '#2d6a4f',
+    );
+    btnContainer.appendChild(spawnDestroyerAiBtn);
+
+    const spawnAssassinAiBtn = createBtn(
+      'Spawn AI: Assassin',
+      () => {
+        for (let i = 0; i < this.game.spawnSystem.aiTanks.length; i++) {
+          const bot = this.game.spawnSystem.aiTanks[i];
+          if (!bot.active) {
+            this.game.spawnSystem.spawnAiTank(
+              bot,
+              30,
+              this.game.playerTank.x,
+              this.game.playerTank.y,
+              'assassin',
+            );
+            break;
+          }
+        }
+        this.renderMetrics();
+      },
+      '#1b4965',
+    );
+    btnContainer.appendChild(spawnAssassinAiBtn);
 
     el.appendChild(btnContainer);
 
