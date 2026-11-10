@@ -116,11 +116,7 @@ export class FireSystem {
             tank.vy * BULLET_INHERIT_TANK_VELOCITY;
 
           // 子彈屬性（以 BASE_BULLET_RADIUS 結合砲管尺寸乘數，Destroyer 為 2.0x = 18 單位對齊砲管寬度 36）
-          let sizeMult = barrel.bulletSizeMultiplier;
-          if (tank.definition.id === 'machine_gun') {
-            // Machine Gun 噴射彈幕隨機微浮動 0.85 ~ 1.10
-            sizeMult *= 0.85 + Math.random() * 0.25;
-          }
+          const sizeMult = barrel.bulletSizeMultiplier;
           const radius = BASE_BULLET_RADIUS * s * sizeMult;
           const hp = tank.bulletHp * barrel.bulletPenMultiplier;
           const damage = tank.bulletDamage * barrel.bulletDamageMultiplier;

@@ -101,7 +101,7 @@ describe('Bullet Ballistics & Fade-out Mechanics', () => {
     expect(BASIC_TANK_DEFINITION.barrels[0].bulletLifespanTicks).toBe(75);
   });
 
-  it('generates randomized bullet radii for Machine Gun trapezoidal spray', () => {
+  it('generates uniform bullet radii for Machine Gun consistent with barrel caliber', () => {
     const fireSystem = new FireSystem();
     const pool = new ObjectPool<Bullet>(20, () => new Bullet());
     const mgTank = new Tank(1, 0, 0);
@@ -116,13 +116,11 @@ describe('Bullet Ballistics & Fade-out Mechanics', () => {
       radii.push(pool.items[activeIdx].radius);
     }
 
-    // 驗證隨機性：10 發子彈中至少存在不同的尺寸
+    // 驗證口徑一致性：同一口徑砲管射出的子彈尺寸完全一致 (半徑 9)
     const uniqueRadii = new Set(radii);
-    expect(uniqueRadii.size).toBeGreaterThan(1);
-    // 基準 9，浮動 0.85 ~ 1.10 -> 半徑約 7.65 ~ 9.9
+    expect(uniqueRadii.size).toBe(1);
     for (const r of radii) {
-      expect(r).toBeGreaterThanOrEqual(9 * 0.84);
-      expect(r).toBeLessThanOrEqual(9 * 1.11);
+      expect(r).toBeCloseTo(9.0);
     }
   });
 });
