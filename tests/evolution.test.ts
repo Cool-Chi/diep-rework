@@ -132,6 +132,7 @@ describe('Milestone 4a: Evolution & Class Specialization', () => {
     let requestedClass = '';
     eventBus.onClassUpgradeRequested((cid) => {
       requestedClass = cid;
+      eventBus.emitClassChanged(1, cid as TankClassId);
     });
 
     // 初始隱藏
@@ -197,10 +198,10 @@ describe('Milestone 4a: Evolution & Class Specialization', () => {
     expect(panel.visible).toBe(true);
     expect(panel.isIgnored).toBe(false);
 
-    // 點擊 Ignore 按鈕 (位置約在 Y: 16 + 76*2 + 8 + 8 = 184 附近)
-    // 依 layout: screenX=16, screenY=16, panel cards = 160x160, ignoreBtn localY = 160 + 8 = 168.
-    // 螢幕座標 = 16 + 168 + 10 = 194.
-    const clickHandled = panel.handlePointerDown(40, 194);
+    // 點擊 Ignore 按鈕 (位置在 Y: 16 + 104*2 + 8 + 8 = 240 附近)
+    // 依 layout: screenX=16, screenY=16, panel cards = 216x216, ignoreBtn localY = 216 + 8 = 224.
+    // 螢幕座標 = 16 + 224 + 14 = 254.
+    const clickHandled = panel.handlePointerDown(40, 250);
     expect(clickHandled).toBe(true);
     expect(panel.isIgnored).toBe(true);
     expect(panel.containsPoint(40, 40)).toBe(false); // 被忽略時不阻擋射擊
@@ -215,6 +216,46 @@ describe('Milestone 4a: Evolution & Class Specialization', () => {
     panel.handlePointerMove(50, 50);
     expect(panel.isIgnored).toBe(false);
     expect(panel.visible).toBe(true);
+
+    panel.destroy();
+  });
+
+  it('seamlessly presents Tier 3 evolution options when a Lv 30 Basic tank evolves into Tier 2', () => {
+    const eventBus = new EventBus();
+    const tank = new Tank(1, 100, 100);
+    const leveling = new LevelingSystem(eventBus, [tank]);
+    const panel = new EvolutionPanel(eventBus);
+    panel.resize(1.0);
+
+    // 監聽轉職與進化事件
+    eventBus.onClassUpgradeRequested((classId) => {
+      leveling.evolveTank(tank, classId, eventBus);
+    });
+    eventBus.onEvolutionAvailable((_tankId, candidates) => {
+      panel.show(candidates);
+    });
+
+    // 1. 直接將 Basic Tank 升至 Lv 30 (6184 分)
+    leveling.addScore(tank, 6184, eventBus);
+    expect(tank.level).toBe(30);
+    expect(tank.definition.id).toBe('basic');
+    expect(panel.visible).toBe(true); // 顯示 Tier 2 的 4 款卡牌
+
+    // 2. 模擬點選第 0 張卡牌 (Twin)
+    // Twin 卡牌範圍約 (16, 16) ~ (120, 120)
+    const handled = panel.handlePointerDown(50, 50);
+    expect(handled).toBe(true);
+
+    // 3. 驗證坦克成功轉為 Twin，且 EvolutionPanel 立即切換為 Tier 3 (Triple Shot)
+    expect(tank.definition.id).toBe('twin');
+    expect(tank.definition.tier).toBe(2);
+    expect(panel.visible).toBe(true); // 面板依然保持展開！
+
+    // 4. 再次點擊卡牌 (此時候選只有 1 張 Triple Shot)
+    panel.handlePointerDown(50, 50);
+    expect(tank.definition.id).toBe('triple_shot');
+    expect(tank.definition.tier).toBe(3);
+    expect(panel.visible).toBe(false); // 無後續進化，面板關閉
 
     panel.destroy();
   });

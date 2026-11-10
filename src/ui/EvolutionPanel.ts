@@ -12,9 +12,9 @@ import {
 import type { EventBus } from '../core/EventBus';
 import { BASE_MARGIN } from './layout';
 
-export const CARD_SIZE = 76;
+export const CARD_SIZE = 104; // 升級為 104px 大尺寸卡片，視覺更清晰大器
 export const CARD_GAP = 8;
-export const IGNORE_BTN_HEIGHT = 22;
+export const IGNORE_BTN_HEIGHT = 28; // 加高至 28px
 export const IGNORE_COOLDOWN_TIME = 2.0; // 忽略後冷卻 2 秒才允許靠攏自動彈出
 
 interface CardView {
@@ -67,11 +67,17 @@ export class EvolutionPanel {
 
     this.ignoreContainer.addChild(this.ignoreBg);
 
+    const resolution =
+      typeof window !== 'undefined'
+        ? Math.max(2, window.devicePixelRatio || 1)
+        : 2;
+
     const ignoreTextStyle = new TextStyle({
       fontFamily: 'Ubuntu, "Lucida Console", monospace, sans-serif',
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: 'bold',
       fill: 0xffffff,
+      stroke: { color: 0x111111, width: 2.5 },
       align: 'center',
     });
 
@@ -79,10 +85,11 @@ export class EvolutionPanel {
       text: 'Ignore',
       style: ignoreTextStyle,
     });
+    this.ignoreText.resolution = resolution;
     this.ignoreText.anchor.set(0.5, 0.5);
     this.ignoreContainer.addChild(this.ignoreText);
 
-    // 監聽轉職成功後自動關閉
+    // 監聽轉職成功後自動關閉（若無後續進化）
     this.eventBus.onClassChanged(() => {
       this.hide();
       this.isIgnored = false;
@@ -173,12 +180,17 @@ export class EvolutionPanel {
     const cardsAreaWidth = cols * cardSize + (cols - 1) * gap;
     const cardsAreaHeight = rows * cardSize + (rows - 1) * gap;
 
+    const resolution =
+      typeof window !== 'undefined'
+        ? Math.max(2, window.devicePixelRatio || 1)
+        : 2;
+
     const nameTextStyle = new TextStyle({
       fontFamily: 'Ubuntu, "Lucida Console", monospace, sans-serif',
-      fontSize: 10,
+      fontSize: 13,
       fontWeight: 'bold',
       fill: 0xffffff,
-      stroke: { color: 0x222222, width: 2 },
+      stroke: { color: 0x111111, width: 3.5 },
       align: 'center',
     });
 
@@ -201,7 +213,7 @@ export class EvolutionPanel {
       const bg = new Graphics();
       cardContainer.addChild(bg);
 
-      // 動態旋轉圖標容器
+      // 動態旋轉圖標容器 (置中偏上)
       const iconContainer = new Container();
       iconContainer.position.set(cardSize * 0.5, cardSize * 0.42);
       cardContainer.addChild(iconContainer);
@@ -214,13 +226,14 @@ export class EvolutionPanel {
       // 繪製卡牌圖標
       this.drawTankIcon(barrelGraphics, bodyGraphics, def);
 
-      // 職業文字
+      // 職業文字 (高解析度渲染、舒適下緣排版)
       const nameText = new Text({
         text: def.name,
         style: nameTextStyle,
       });
-      nameText.anchor.set(0.5, 1);
-      nameText.position.set(cardSize * 0.5, cardSize - 4);
+      nameText.resolution = resolution;
+      nameText.anchor.set(0.5, 0.5);
+      nameText.position.set(cardSize * 0.5, cardSize - 16);
       cardContainer.addChild(nameText);
 
       this.cardsContainer.addChild(cardContainer);
@@ -265,11 +278,11 @@ export class EvolutionPanel {
 
     card.bgGraphics.clear();
     card.bgGraphics
-      .roundRect(0, 0, cardSize, cardSize, 6)
+      .roundRect(0, 0, cardSize, cardSize, 8)
       .fill({ color: baseColor, alpha: isHovered ? 0.95 : 0.85 })
       .stroke({
         color: isHovered ? 0xffffff : COLOR_STROKE,
-        width: isHovered ? 2.5 : 2,
+        width: isHovered ? 3 : 2.5,
       });
   }
 
@@ -283,16 +296,16 @@ export class EvolutionPanel {
 
     this.ignoreBg.clear();
     this.ignoreBg
-      .roundRect(0, 0, w, h, 4)
+      .roundRect(0, 0, w, h, 6)
       .fill({ color: isHovered ? 0x777777 : 0x555555, alpha: 0.9 })
       .stroke({
         color: isHovered ? 0x999999 : 0x333333,
-        width: 1.5,
+        width: 2,
       });
   }
 
   /**
-   * 繪製置於卡牌內之微縮坦克圖標幾何（底盤置中於 0, 0）
+   * 繪製置於卡牌內之微縮坦克圖標幾何（底盤置中於 0, 0，放大微縮比例至 0.60）
    */
   private drawTankIcon(
     barrelG: Graphics,
@@ -302,7 +315,7 @@ export class EvolutionPanel {
     barrelG.clear();
     bodyG.clear();
 
-    const iconScale = 0.45;
+    const iconScale = 0.6; // 提高至 0.60 放大外觀細節
     const barrels = def.barrels;
 
     for (let b = 0; b < barrels.length; b++) {
@@ -340,14 +353,14 @@ export class EvolutionPanel {
       barrelG
         .poly(pts)
         .fill({ color: COLOR_BARREL_GRAY })
-        .stroke({ color: COLOR_STROKE, width: 1.5 });
+        .stroke({ color: COLOR_STROKE, width: 2 });
     }
 
     const r = def.bodyRadius * iconScale;
     bodyG
       .circle(0, 0, r)
       .fill({ color: COLOR_TANK_BLUE })
-      .stroke({ color: COLOR_STROKE, width: 1.5 });
+      .stroke({ color: COLOR_STROKE, width: 2 });
   }
 
   /**
@@ -376,8 +389,8 @@ export class EvolutionPanel {
     // 1. 若處於 Ignore 狀態且冷卻時間已過，滑鼠靠近左上角觸發區時自動重新彈出
     if (this.isIgnored && this.currentCandidates.length > 0) {
       if (this.ignoreCooldown <= 0) {
-        const triggerW = Math.max(this.panelWidth * s + 60, 200);
-        const triggerH = Math.max(this.panelHeight * s + 60, 200);
+        const triggerW = Math.max(this.panelWidth * s + 60, 240);
+        const triggerH = Math.max(this.panelHeight * s + 60, 240);
         if (
           screenX >= 0 &&
           screenX <= triggerW &&
@@ -461,8 +474,12 @@ export class EvolutionPanel {
         localY >= b.y &&
         localY <= b.y + b.h
       ) {
-        this.eventBus.emitClassUpgradeRequested(this.cards[i].classId);
-        this.hide();
+        const chosenClass = this.cards[i].classId;
+        this.eventBus.emitClassUpgradeRequested(chosenClass);
+        // 注意：不得在此處無條件執行 this.hide()！
+        // 若當前坦克達成更高級轉職（例如 Lv30 轉職 Tier 2 後尚有 Tier 3 進化），
+        // checkEvolution 會同步喚起 show(nextCandidates) 更新面板。
+        // 若無後續進化，onClassChanged 監聽器會自動呼叫 hide()。
         return true;
       }
     }
