@@ -9,7 +9,7 @@
 1. **里程碑紀律 (Milestone Discipline)**：
    - 嚴格按照 [PLAN.md](./PLAN.md) 定義的里程碑順序（**M1 → M2 → M3a → M3b → M4a → M4b → M5 → M6**）逐步推進。
    - **禁止提前跳步**實作後續階段功能（例如在 M1 物理底座尚未驗收前就開始寫轉職或 AI）。
-   - **收尾執行 `/milestone-check`**：每個里程碑結尾必須執行 `/milestone-check <編號>`（見 [.agent/workflows/milestone-check.md](./.agent/workflows/milestone-check.md)），依其步驟進行完整自動檢查、熱路徑掃描、驗收清單核對與 commit 規範檢查，並依其報告格式回報。回報後**立即停止等待使用者確認**，未獲指示前不得自行進入下一個里程碑。原本散落在各節的收尾回報要求一律以此流程為準，不重複規定。
+   - **收尾執行 `/verify-milestone`**：每個里程碑結尾必須執行 `/verify-milestone <編號>`（見 [.agent/skills/verify-milestone/SKILL.md](./.agent/skills/verify-milestone/SKILL.md)），依其步驟進行完整自動檢查、熱路徑掃描、browsermcp 瀏覽器操作與視覺驗收、驗收清單核對與 commit 規範檢查，並依其報告格式回報。回報後**立即停止等待使用者確認**，未獲指示前不得自行進入下一個里程碑。原本散落在各節的收尾回報要求一律以此流程為準，不重複規定。
 2. **零程式碼確認期 (Plan-First Rule)**：
    - 未獲使用者明確「確認開始實作」指令前，不得生成或修改任何專案程式碼檔案。
 3. **無伺服器與純前端 (Pure Client-Side)**：
@@ -114,7 +114,7 @@
    - `DebugOverlay.ts`（按 `Backquote` `` ` `` 鍵開啟）**只能在 `if (import.meta.env.DEV)` 條件下動態載入**，確保正式生產打包不含任何除錯面板程式碼。
    - 每個里程碑新增功能時，必須同步擴充 `DebugOverlay` 對應的測試與調參功能（如：無敵、一鍵升級、強制切換職業、生成 600 子彈 + 500 形狀壓力測試、調整 `TODO(tune)` 常數）。
 3. **收尾驗收回報**：
-   - 里程碑完成時的各項檢查、熱路徑掃描、驗收清單核對與回報，一律依 `/milestone-check <編號>` 流程執行並套用其報告格式，不再於各節重複列出收尾回報項目。
+   - 里程碑完成時的各項檢查、熱路徑掃描、驗收清單核對與回報，一律依 `/verify-milestone <編號>` 流程執行並套用其報告格式，不再於各節重複列出收尾回報項目。
 
 ---
 
@@ -168,7 +168,7 @@
    - **禁止使用無 type 的提交訊息**（如禁止 `"M1: foundation"`）。
    - **嚴禁私自 `git commit --amend` 或 force push 已回報給使用者的 commit**，除非使用者明確要求。
    - **不得額外安裝套件**：不得為了檢查 commit 格式安裝 `commitlint` 或 `husky` 等工具（維持套件白名單不變）。
-   - 里程碑收尾時的 commit 規範檢查依 `/milestone-check` 流程步驟執行。
+   - 里程碑收尾時的 commit 規範檢查依 `/verify-milestone` 流程步驟執行。
 
 ---
 
