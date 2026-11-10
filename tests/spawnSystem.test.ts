@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MAP_SIZE } from '../src/config/constants';
 import { Tank } from '../src/entities/Tank';
 import { SpawnSystem, TARGET_AI_COUNT } from '../src/systems/SpawnSystem';
 
@@ -6,7 +7,7 @@ describe('Milestone 5: SpawnSystem (AI Ecosystem & Tier Scaling)', () => {
   it('pre-allocates target count of AI tanks upon instantiation', () => {
     const spawnSystem = new SpawnSystem();
     expect(spawnSystem.aiTanks).toHaveLength(TARGET_AI_COUNT);
-    expect(TARGET_AI_COUNT).toBe(20);
+    expect(TARGET_AI_COUNT).toBe(40);
 
     for (let i = 0; i < spawnSystem.aiTanks.length; i++) {
       const bot = spawnSystem.aiTanks[i];
@@ -16,9 +17,9 @@ describe('Milestone 5: SpawnSystem (AI Ecosystem & Tier Scaling)', () => {
     }
   });
 
-  it('initializes all 20 AI bots with names, colors, and valid attributes', () => {
+  it('initializes all 40 AI bots with names, colors, and valid attributes', () => {
     const spawnSystem = new SpawnSystem();
-    const player = new Tank(1, 2000, 2000);
+    const player = new Tank(1, MAP_SIZE * 0.5, MAP_SIZE * 0.5);
     player.level = 1;
 
     spawnSystem.init(player);
@@ -35,7 +36,7 @@ describe('Milestone 5: SpawnSystem (AI Ecosystem & Tier Scaling)', () => {
 
   it('scales AI tank tiers appropriately based on player level', () => {
     const spawnSystem = new SpawnSystem();
-    const player = new Tank(1, 2000, 2000);
+    const player = new Tank(1, MAP_SIZE * 0.5, MAP_SIZE * 0.5);
 
     // 當玩家為 Lv 30 以上時，AI 生態應包含高級階層 (Tier 2 或 Tier 3)
     player.level = 30;
@@ -49,7 +50,7 @@ describe('Milestone 5: SpawnSystem (AI Ecosystem & Tier Scaling)', () => {
 
   it('enqueues dead AI and respawns after 75 ticks delay', () => {
     const spawnSystem = new SpawnSystem();
-    const player = new Tank(1, 2000, 2000);
+    const player = new Tank(1, MAP_SIZE * 0.5, MAP_SIZE * 0.5);
     spawnSystem.init(player);
 
     const victim = spawnSystem.aiTanks[0];
@@ -72,7 +73,7 @@ describe('Milestone 5: SpawnSystem (AI Ecosystem & Tier Scaling)', () => {
 
   it('allows forced class spawning and cleans up all AI on clearAllAi', () => {
     const spawnSystem = new SpawnSystem();
-    const player = new Tank(1, 2000, 2000);
+    const player = new Tank(1, MAP_SIZE * 0.5, MAP_SIZE * 0.5);
     spawnSystem.init(player);
 
     // 強制將第一個 bot 生成為 Destroyer
@@ -92,14 +93,15 @@ describe('Milestone 5: SpawnSystem (AI Ecosystem & Tier Scaling)', () => {
 
   it('spawns AI tanks away from map center and avoids player position', () => {
     const spawnSystem = new SpawnSystem();
-    const player = new Tank(1, 2000, 2000); // 玩家在中心 (2000, 2000)
+    const center = MAP_SIZE * 0.5;
+    const player = new Tank(1, center, center); // 玩家在中心
     spawnSystem.init(player);
 
     for (let i = 0; i < spawnSystem.aiTanks.length; i++) {
       const bot = spawnSystem.aiTanks[i];
       // 確保沒有任何 AI 生成在距離玩家/地圖中心 < 400 範圍內
-      const dx = bot.x - 2000;
-      const dy = bot.y - 2000;
+      const dx = bot.x - center;
+      const dy = bot.y - center;
       const dist = Math.sqrt(dx * dx + dy * dy);
       expect(dist).toBeGreaterThanOrEqual(400);
     }
@@ -107,16 +109,17 @@ describe('Milestone 5: SpawnSystem (AI Ecosystem & Tier Scaling)', () => {
 
   it('distributes AI tanks across map quadrants without clustering in a single corner', () => {
     const spawnSystem = new SpawnSystem();
-    const player = new Tank(1, 2000, 2000);
+    const center = MAP_SIZE * 0.5;
+    const player = new Tank(1, center, center);
     spawnSystem.init(player);
 
-    // 檢查 20 隻 AI 坦克的空間覆蓋度
+    // 檢查 40 隻 AI 坦克的空間覆蓋度
     // 統計落在四個象限的數量，各象限均應有分布，不得全數擠在單一角落
     const quadrants = [0, 0, 0, 0];
     for (let i = 0; i < spawnSystem.aiTanks.length; i++) {
       const bot = spawnSystem.aiTanks[i];
-      const qX = bot.x >= 2000 ? 1 : 0;
-      const qY = bot.y >= 2000 ? 1 : 0;
+      const qX = bot.x >= center ? 1 : 0;
+      const qY = bot.y >= center ? 1 : 0;
       const qIdx = qY * 2 + qX;
       quadrants[qIdx]++;
     }
@@ -125,15 +128,15 @@ describe('Milestone 5: SpawnSystem (AI Ecosystem & Tier Scaling)', () => {
     const populatedQuadrants = quadrants.filter((q) => q > 0).length;
     expect(populatedQuadrants).toBeGreaterThanOrEqual(3);
 
-    // 單一象限最多不得超過 14 隻（杜絕極端堆積）
+    // 單一象限最多不得超過 24 隻（40 隻均勻分布各約 10 隻，杜絕極端堆積）
     for (const count of quadrants) {
-      expect(count).toBeLessThanOrEqual(14);
+      expect(count).toBeLessThanOrEqual(24);
     }
   });
 
   it('spawns Tier 4 AI tanks when player reaches Level 45', () => {
     const spawnSystem = new SpawnSystem();
-    const player = new Tank(1, 2000, 2000);
+    const player = new Tank(1, MAP_SIZE * 0.5, MAP_SIZE * 0.5);
     player.level = 45;
 
     spawnSystem.init(player);

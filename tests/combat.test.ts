@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SHAPE_TARGET_COUNT } from '../src/config/constants';
 import { EventBus } from '../src/core/EventBus';
 import { ObjectPool } from '../src/core/ObjectPool';
 import { Bullet } from '../src/entities/Bullet';
@@ -247,11 +248,11 @@ describe('Combat and Collision System (M2)', () => {
     expect(square.hp).toBe(3);
   });
 
-  it('Shape population stays at 500, ratio approximately 70/22/8', () => {
+  it('Shape population stays at SHAPE_TARGET_COUNT, ratio approximately 70/22/8', () => {
     const shapeSystem = new ShapeSystem();
     shapeSystem.fillToTarget();
 
-    expect(shapeSystem.activeCount).toBe(500);
+    expect(shapeSystem.activeCount).toBe(SHAPE_TARGET_COUNT);
 
     let squares = 0;
     let triangles = 0;
@@ -266,16 +267,16 @@ describe('Combat and Collision System (M2)', () => {
       }
     }
 
-    expect(squares + triangles + pentagons).toBe(500);
-    // 70% 方塊 ~ 350
-    expect(squares).toBeGreaterThan(280);
-    expect(squares).toBeLessThan(420);
-    // 22% 三角 ~ 110
-    expect(triangles).toBeGreaterThan(60);
-    expect(triangles).toBeLessThan(160);
-    // 8% 五邊形 ~ 40
-    expect(pentagons).toBeGreaterThan(15);
-    expect(pentagons).toBeLessThan(75);
+    expect(squares + triangles + pentagons).toBe(SHAPE_TARGET_COUNT);
+    // 70% 方塊 ~ 980 (在 800 ~ 1150 之間)
+    expect(squares).toBeGreaterThan(800);
+    expect(squares).toBeLessThan(1150);
+    // 22% 三角 ~ 308 (在 200 ~ 420 之間)
+    expect(triangles).toBeGreaterThan(200);
+    expect(triangles).toBeLessThan(420);
+    // 8% 五邊形 ~ 112 (在 50 ~ 200 之間)
+    expect(pentagons).toBeGreaterThan(50);
+    expect(pentagons).toBeLessThan(200);
   });
 
   it('handles tank vs tank collision push-back and mutual body damage', () => {

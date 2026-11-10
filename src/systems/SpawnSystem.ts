@@ -10,7 +10,7 @@ import {
 import { recomputeDerivedStats } from '../core/deriveStats';
 import { Tank } from '../entities/Tank';
 
-export const TARGET_AI_COUNT = 20;
+export const TARGET_AI_COUNT = 40;
 const RESPAWN_DELAY_TICKS = 75; // 死亡後 3 秒 (75 ticks) 重生
 const AI_STARTING_ID = 1000;
 
@@ -49,17 +49,17 @@ interface DeadAiRecord {
 
 /**
  * AI 生成與生態管理系統 (SpawnSystem)
- * 動態維持場上 20 隻 AI 坦克，依玩家等級進行梯隊生成與合理配點。
+ * 動態維持場上 40 隻 AI 坦克，依玩家等級進行梯隊生成與合理配點。
  */
 export class SpawnSystem {
   public readonly aiTanks: Tank[] = [];
   private readonly deadAiQueue: DeadAiRecord[] = [];
 
   constructor() {
-    // 預先建立 20 隻 AI 坦克實體 (零 GC)
+    // 預先建立 40 隻 AI 坦克實體 (零 GC)
     for (let i = 0; i < TARGET_AI_COUNT; i++) {
       const id = AI_STARTING_ID + i + 1;
-      const bot = new Tank(id, 2000, 2000);
+      const bot = new Tank(id, MAP_SIZE * 0.5, MAP_SIZE * 0.5);
       bot.isAi = true;
       bot.active = false;
       this.aiTanks.push(bot);
@@ -67,7 +67,7 @@ export class SpawnSystem {
   }
 
   /**
-   * 初始化場上全數 20 隻 AI
+   * 初始化場上全數 40 隻 AI
    */
   public init(playerTank: Tank): void {
     const len = this.aiTanks.length;

@@ -11,7 +11,7 @@ import type { Game } from '../core/Game';
 
 /**
  * 完整開發除錯面板 (DebugOverlay)
- * 僅在 import.meta.env.DEV 環境動態載入，按 Backquote (`) 開啟/關閉
+ * 僅在 import.meta.env.DEV 環境動態載入，按 Backquote (`) 或 Slash (/) 開啟/關閉
  * 採用純 DOM 實作，事件嚴格隔離，具備效能指標、渲染耗時、等級加點、壓力測試與常數即時微調
  */
 export class DebugOverlay {
@@ -69,7 +69,7 @@ export class DebugOverlay {
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
-    if (e.code === 'Backquote') {
+    if (e.code === 'Backquote' || e.code === 'Slash' || e.key === '/') {
       this.toggleVisibility();
     }
   }
@@ -194,30 +194,30 @@ export class DebugOverlay {
     ).toFixed(3);
 
     this.metricsElement.innerHTML = `
-      <div style="font-weight:bold;color:#00ffcc;margin-bottom:6px;">[DEBUG PANEL] (Toggle: \`)</div>
-      <div>FPS: <b>${this.currentFps}</b> | TPS: <b>${this.currentTps}</b> (target 25)</div>
-      <div>Tick Duration: avg <b>${this.avgTickMs.toFixed(2)}ms</b> | max <b>${this.maxTickMs.toFixed(2)}ms</b></div>
-      <div>Render Duration: avg <b>${this.avgRenderMs.toFixed(2)}ms</b> | max <b>${this.maxRenderMs.toFixed(2)}ms</b></div>
-      <div>HUD Duration: avg <b>${this.avgHudMs.toFixed(2)}ms</b> | max <b>${this.maxHudMs.toFixed(2)}ms</b></div>
-      <div>HealthBars Pool: <b>${this.game.healthBarRenderer.activeCount}</b> / ${this.game.healthBarRenderer.capacity} active</div>
-      <div>Bullets: ${bulletAlert ? `<b style="color:#ff3333">${activeBullets} active / ${visibleBullets} visible [ALERT: INVISIBLE!]</b>` : `<b>${activeBullets}</b> active / <b>${visibleBullets}</b> visible`}</div>
-      <div>Shapes: ${shapeAlert ? `<b style="color:#ff3333">${activeShapes} active / ${visibleShapes} visible [ALERT: INVISIBLE!]</b>` : `<b>${activeShapes}</b> active / <b>${visibleShapes}</b> visible`}</div>
-      <div>Particles: <b>${this.game.particleRenderer.visibleCount}</b> visible / <b>${this.game.particlePool.capacity}</b> pool</div>
-      <div style="border-top:1px dashed rgba(255,255,255,0.15);margin:4px 0;padding-top:4px;">
-        Level: <b style="color:#ffff00">${tank.level}</b>/30 | Score: <b>${tank.score}</b> (next: <b>${nextScore}</b>)
+      <div style="font-weight:bold;color:#00ffcc;margin-bottom:4px;display:flex;justify-content:space-between;">
+        <span>[DEBUG PANEL] (\` or /)</span>
+        <span style="font-size:10px;color:#888;">M8</span>
+      </div>
+      <div>FPS: <b>${this.currentFps}</b> | TPS: <b>${this.currentTps}</b></div>
+      <div>Tick: <b>${this.avgTickMs.toFixed(2)}ms</b> (max <b>${this.maxTickMs.toFixed(2)}ms</b>)</div>
+      <div>Render: <b>${this.avgRenderMs.toFixed(2)}ms</b> (max <b>${this.maxRenderMs.toFixed(2)}ms</b>)</div>
+      <div>HUD: <b>${this.avgHudMs.toFixed(2)}ms</b> (max <b>${this.maxHudMs.toFixed(2)}ms</b>)</div>
+      <div>HealthBars: <b>${this.game.healthBarRenderer.activeCount}</b> / ${this.game.healthBarRenderer.capacity}</div>
+      <div>Bullets: ${bulletAlert ? `<b style="color:#ff3333">${activeBullets} / ${visibleBullets} [ALERT]</b>` : `<b>${activeBullets}</b> act / <b>${visibleBullets}</b> vis`}</div>
+      <div>Shapes: ${shapeAlert ? `<b style="color:#ff3333">${activeShapes} / ${visibleShapes} [ALERT]</b>` : `<b>${activeShapes}</b> act / <b>${visibleShapes}</b> vis`}</div>
+      <div>Particles: <b>${this.game.particleRenderer.visibleCount}</b> vis / <b>${this.game.particlePool.capacity}</b></div>
+      <div style="border-top:1px dashed rgba(255,255,255,0.15);margin:3px 0;padding-top:3px;">
+        Lv: <b style="color:#ffff00">${tank.level}</b>/30 | Score: <b>${tank.score}</b> (next: <b>${nextScore}</b>)
       </div>
       <div>Class: <b style="color:#00e5ff">${tank.definition.name}</b> (Tier ${tank.definition.tier})</div>
-      <div>Unspent Points: <b style="color:#00ff88">${tank.statPoints}</b> | Stats [1~8]: <b style="color:#33ccff">${statsArr}</b></div>
-      <div>HP: <b>${Math.ceil(tank.hp)}</b>/${tank.maxHp} | Reload: <b>${tank.reloadTicks}t</b> | BulletSpd: <b>${tank.bulletSpeed.toFixed(2)}</b> | FOV: <b>${fovVal}</b></div>
-      <div>BulletHP: <b>${(tank.bulletHp * (tank.definition.barrels[0]?.bulletPenMultiplier ?? 1)).toFixed(1)}</b> | BulletDmg: <b>${(tank.bulletDamage * (tank.definition.barrels[0]?.bulletDamageMultiplier ?? 1)).toFixed(1)}</b> | BulletR: <b>${(BASE_BULLET_RADIUS * (tank.definition.barrels[0]?.bulletSizeMultiplier ?? 1)).toFixed(1)}</b> | Life: <b>${tank.definition.barrels[0]?.bulletLifespanTicks ?? 75}t</b></div>
-      <div style="border-top:1px dashed rgba(255,255,255,0.15);margin:4px 0;padding-top:4px;">
-        Active AI: <b style="color:#00ff88">${this.game.spawnSystem.getActiveAiCount()}</b>/20 | AI Passive: <b style="color:${this.game.aiSystem.passiveMode ? '#ffbb00' : '#00ff88'}">${this.game.aiSystem.passiveMode ? 'ON' : 'OFF'}</b>
+      <div>Pts: <b style="color:#00ff88">${tank.statPoints}</b> | Stats: <b style="color:#33ccff">${statsArr}</b></div>
+      <div>HP: <b>${Math.ceil(tank.hp)}</b>/${tank.maxHp} | FOV: <b>${fovVal}</b></div>
+      <div style="border-top:1px dashed rgba(255,255,255,0.15);margin:3px 0;padding-top:3px;">
+        AI: <b style="color:#00ff88">${this.game.spawnSystem.getActiveAiCount()}</b>/40 | Passive: <b style="color:${this.game.aiSystem.passiveMode ? '#ffbb00' : '#00ff88'}">${this.game.aiSystem.passiveMode ? 'ON' : 'OFF'}</b>
       </div>
-      <div>
-        Pressed Keys: <b style="color:#ffff00">${pressedStr}</b>
-      </div>
-      <div>Shapes Destroyed: <b>${this.shapeDestroyedCount}</b> | Tank Deaths: <b>${this.tankDiedCount}</b></div>
-      <div>God Mode: <b style="color:${this.isGodMode ? '#00ff88' : '#ff5555'}">${this.isGodMode ? 'ON' : 'OFF'}</b> | God View: <b style="color:${this.game.camera.isGodView ? '#00ff88' : '#888888'}">${this.game.camera.isGodView ? 'ON' : 'OFF'}</b></div>
+      <div>Keys: <b style="color:#ffff00">${pressedStr}</b> | Dead: S:<b>${this.shapeDestroyedCount}</b> T:<b>${this.tankDiedCount}</b></div>
+      <div>God: <b style="color:${this.isGodMode ? '#00ff88' : '#ff5555'}">${this.isGodMode ? 'ON' : 'OFF'}</b> | GodView: <b style="color:${this.game.camera.isGodView ? '#00ff88' : '#888888'}">${this.game.camera.isGodView ? 'ON' : 'OFF'}</b></div>
+      <div>IgnorePlayer: <b style="color:${this.game.aiSystem.ignorePlayer ? '#00ff88' : '#ff5555'}">${this.game.aiSystem.ignorePlayer ? 'ON' : 'OFF'}</b></div>
     `;
   }
 
@@ -227,19 +227,19 @@ export class DebugOverlay {
     el.style.position = 'fixed';
     el.style.top = '10px';
     el.style.left = '10px';
-    el.style.padding = '12px 16px';
-    el.style.backgroundColor = 'rgba(15, 20, 28, 0.9)';
+    el.style.padding = '8px 10px';
+    el.style.backgroundColor = 'rgba(15, 20, 28, 0.88)';
     el.style.color = '#e0e0e0';
     el.style.fontFamily = 'Consolas, monospace';
-    el.style.fontSize = '12px';
-    el.style.borderRadius = '8px';
-    el.style.boxShadow = '0 4px 16px rgba(0,0,0,0.4)';
+    el.style.fontSize = '11px';
+    el.style.borderRadius = '6px';
+    el.style.boxShadow = '0 4px 16px rgba(0,0,0,0.5)';
     el.style.border = '1px solid rgba(255,255,255,0.15)';
     el.style.zIndex = '999999';
-    el.style.lineHeight = '1.45';
+    el.style.lineHeight = '1.35';
     el.style.userSelect = 'none';
-    el.style.maxWidth = '380px';
-    el.style.maxHeight = '90vh';
+    el.style.maxWidth = '265px';
+    el.style.maxHeight = '85vh';
     el.style.overflowY = 'auto';
 
     // 關鍵：只阻擋滑鼠與 pointer 事件傳給遊戲，不阻擋鍵盤事件（確保 keyup 永遠能被接收）
@@ -256,14 +256,27 @@ export class DebugOverlay {
     const hr1 = document.createElement('hr');
     hr1.style.border = '0';
     hr1.style.borderTop = '1px solid rgba(255,255,255,0.15)';
-    hr1.style.margin = '8px 0';
+    hr1.style.margin = '6px 0';
     el.appendChild(hr1);
 
-    // 2. 快捷動作按鈕區
+    // 2. 快捷動作按鈕區 (Collapsible Details)
+    const detailsActions = document.createElement('details');
+    detailsActions.open = true;
+    detailsActions.style.marginBottom = '6px';
+
+    const sumActions = document.createElement('summary');
+    sumActions.textContent = '⚡ Actions & AI';
+    sumActions.style.cursor = 'pointer';
+    sumActions.style.color = '#70a5fd';
+    sumActions.style.fontWeight = 'bold';
+    sumActions.style.outline = 'none';
+    sumActions.style.marginBottom = '4px';
+    detailsActions.appendChild(sumActions);
+
     const btnContainer = document.createElement('div');
     btnContainer.style.display = 'grid';
     btnContainer.style.gridTemplateColumns = '1fr 1fr';
-    btnContainer.style.gap = '5px';
+    btnContainer.style.gap = '3px';
 
     const createBtn = (
       text: string,
@@ -272,14 +285,17 @@ export class DebugOverlay {
     ) => {
       const b = document.createElement('button');
       b.textContent = text;
-      b.style.padding = '4px 6px';
+      b.style.padding = '3px 4px';
       b.style.backgroundColor = color;
       b.style.color = '#ffffff';
       b.style.border = '1px solid rgba(255,255,255,0.2)';
-      b.style.borderRadius = '4px';
+      b.style.borderRadius = '3px';
       b.style.cursor = 'pointer';
-      b.style.fontSize = '11px';
+      b.style.fontSize = '10px';
       b.style.fontFamily = 'inherit';
+      b.style.whiteSpace = 'nowrap';
+      b.style.overflow = 'hidden';
+      b.style.textOverflow = 'ellipsis';
       b.addEventListener('click', () => {
         onClick();
         b.blur();
@@ -295,8 +311,23 @@ export class DebugOverlay {
     });
     btnContainer.appendChild(godBtn);
 
+    // 無視玩家切換按鈕 (預設開啟)
+    const ignorePlayerBtn = createBtn(
+      `Ignore: ${this.game.aiSystem.ignorePlayer ? 'ON' : 'OFF'}`,
+      () => {
+        this.game.aiSystem.ignorePlayer = !this.game.aiSystem.ignorePlayer;
+        ignorePlayerBtn.textContent = `Ignore: ${this.game.aiSystem.ignorePlayer ? 'ON' : 'OFF'}`;
+        ignorePlayerBtn.style.backgroundColor = this.game.aiSystem.ignorePlayer
+          ? '#1b4965'
+          : '#555555';
+        this.renderMetrics();
+      },
+      this.game.aiSystem.ignorePlayer ? '#1b4965' : '#555555',
+    );
+    btnContainer.appendChild(ignorePlayerBtn);
+
     // 補滿形狀按鈕
-    const fillShapeBtn = createBtn('Fill Shapes (500)', () => {
+    const fillShapeBtn = createBtn('Fill Shapes (1400)', () => {
       this.game.shapeSystem.fillToTarget();
       this.renderMetrics();
     });
@@ -508,7 +539,23 @@ export class DebugOverlay {
     );
     btnContainer.appendChild(triggerEvoBtn);
 
-    // 職業一鍵切換按鈕區 (Tier 1 ~ Tier 4 全 21 款職業)
+    // 職業一鍵切換折疊區 (Tier 1 ~ Tier 4 全 21 款職業)
+    const detailsClasses = document.createElement('details');
+    detailsClasses.style.marginBottom = '6px';
+    const sumClasses = document.createElement('summary');
+    sumClasses.textContent = '🎮 Tank Classes (21)';
+    sumClasses.style.cursor = 'pointer';
+    sumClasses.style.color = '#70a5fd';
+    sumClasses.style.fontWeight = 'bold';
+    sumClasses.style.outline = 'none';
+    sumClasses.style.marginBottom = '4px';
+    detailsClasses.appendChild(sumClasses);
+
+    const classBtnContainer = document.createElement('div');
+    classBtnContainer.style.display = 'grid';
+    classBtnContainer.style.gridTemplateColumns = '1fr 1fr';
+    classBtnContainer.style.gap = '3px';
+
     const classList: TankClassId[] = [
       'basic',
       'twin',
@@ -535,7 +582,7 @@ export class DebugOverlay {
     for (let c = 0; c < classList.length; c++) {
       const cid = classList[c];
       const btn = createBtn(
-        `Class: ${TANKS_CONFIG[cid].name}`,
+        TANKS_CONFIG[cid].name,
         () => {
           const reqLv = TANKS_CONFIG[cid].requiredLevel;
           if (this.game.playerTank.level < reqLv) {
@@ -555,10 +602,11 @@ export class DebugOverlay {
           );
           this.renderMetrics();
         },
-        '#3a5a40',
+        '#2d5a3f',
       );
-      btnContainer.appendChild(btn);
+      classBtnContainer.appendChild(btn);
     }
+    detailsClasses.appendChild(classBtnContainer);
 
     // 600 子彈壓力測試按鈕
     const stressBtn = createBtn(
@@ -604,7 +652,7 @@ export class DebugOverlay {
     btnContainer.appendChild(toggleAiLabelsBtn);
 
     const respawnAiBtn = createBtn(
-      'Respawn 20 AI',
+      'Respawn 40 AI',
       () => {
         this.game.spawnSystem.init(this.game.playerTank);
         this.renderMetrics();
@@ -703,18 +751,25 @@ export class DebugOverlay {
     );
     btnContainer.appendChild(particleBurstBtn);
 
-    el.appendChild(btnContainer);
+    detailsActions.appendChild(btnContainer);
+    el.appendChild(detailsActions);
+    el.appendChild(detailsClasses);
 
-    // 分隔線
-    const hr2 = document.createElement('hr');
-    hr2.style.border = '0';
-    hr2.style.borderTop = '1px solid rgba(255,255,255,0.15)';
-    hr2.style.margin = '8px 0';
-    el.appendChild(hr2);
+    // 3. 常數即時調參滑桿區 (Collapsible Details)
+    const detailsSliders = document.createElement('details');
+    detailsSliders.style.marginBottom = '6px';
+    const sumSliders = document.createElement('summary');
+    sumSliders.textContent = '⚙️ Sliders & Tuning';
+    sumSliders.style.cursor = 'pointer';
+    sumSliders.style.color = '#70a5fd';
+    sumSliders.style.fontWeight = 'bold';
+    sumSliders.style.outline = 'none';
+    sumSliders.style.marginBottom = '4px';
+    detailsSliders.appendChild(sumSliders);
 
-    // 3. 常數即時調參滑桿區 (TODO(tune))
     const sliderContainer = document.createElement('div');
-    sliderContainer.style.fontSize = '11px';
+    sliderContainer.style.fontSize = '10px';
+    sliderContainer.style.marginTop = '4px';
 
     const createSlider = (
       label: string,
@@ -859,7 +914,8 @@ export class DebugOverlay {
       },
     );
 
-    el.appendChild(sliderContainer);
+    detailsSliders.appendChild(sliderContainer);
+    el.appendChild(detailsSliders);
 
     document.body.appendChild(el);
     this.element = el;

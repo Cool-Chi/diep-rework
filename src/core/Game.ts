@@ -154,7 +154,11 @@ export class Game {
 
     // 監聽幾何形狀摧毀特效
     this.eventBus.onShapeDestroyed((kind, _killerId, x, y) => {
-      this.spawnShapeExplosion(x || 2000, y || 2000, kind);
+      this.spawnShapeExplosion(
+        x || WORLD_WIDTH * 0.5,
+        y || WORLD_HEIGHT * 0.5,
+        kind,
+      );
     });
 
     // 監聽坦克陣亡事件（死亡爆裂、觀戰鏡頭、擊殺浮動 Toast 與結算畫面）
@@ -162,8 +166,8 @@ export class Game {
       this.spawnSystem.handleTankDeath(victimId, this.currentTick);
 
       const victim = this.findTankById(victimId);
-      const posX = victimX || victim?.x || 2000;
-      const posY = victimY || victim?.y || 2000;
+      const posX = victimX || victim?.x || WORLD_WIDTH * 0.5;
+      const posY = victimY || victim?.y || WORLD_HEIGHT * 0.5;
       const color = victim?.color ?? 0x00b2e1;
       this.spawnTankExplosion(posX, posY, color);
 
@@ -458,8 +462,8 @@ export class Game {
     const respawnScore = SCORE_FOR_LEVEL[respawnLevel - 1] ?? 0;
 
     const safePos = this.spawnSystem.getRandomSpawnPosition(
-      2000,
-      2000,
+      WORLD_WIDTH * 0.5,
+      WORLD_HEIGHT * 0.5,
       this.playerTank.id,
     );
     this.playerTank.setClass(BASIC_TANK_DEFINITION);

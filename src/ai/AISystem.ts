@@ -19,6 +19,7 @@ const BORDER_BUFFER = 250; // 邊界推回力場緩衝
  */
 export class AISystem {
   public passiveMode = false; // 是否進入測試靜止/不開火模式
+  public ignorePlayer = true; // 是否無視玩家 (調試用，預設開啟)
 
   /**
    * 每個模擬 tick (25 TPS) 更新所有活動 AI 坦克的輸入指令
@@ -232,7 +233,7 @@ export class AISystem {
     bulletPool: ObjectPool<Bullet>,
   ): void {
     let target = this.findTankById(bot.aiTargetId, allTanks);
-    if (!target?.active) {
+    if (!target?.active || (this.ignorePlayer && !target.isAi)) {
       target = this.findNearestEnemyTank(bot, allTanks, PERCEPTION_RADIUS);
       if (!target) {
         bot.aiState = 'farming';
@@ -331,7 +332,13 @@ export class AISystem {
 
     for (let i = 0; i < len; i++) {
       const bullet = items[i];
-      if (!bullet.active || bullet.ownerId === bot.id) continue;
+      if (
+        !bullet.active ||
+        bullet.ownerId === bot.id ||
+        (this.ignorePlayer && bullet.ownerId === 1)
+      ) {
+        continue;
+      }
 
       const bdx = bullet.x - bot.x;
       const bdy = bullet.y - bot.y;
@@ -406,7 +413,13 @@ export class AISystem {
 
     for (let i = 0; i < len; i++) {
       const other = allTanks[i];
-      if (!other.active || other.id === self.id) continue;
+      if (
+        !other.active ||
+        other.id === self.id ||
+        (this.ignorePlayer && !other.isAi)
+      ) {
+        continue;
+      }
 
       const dx = other.x - self.x;
       const dy = other.y - self.y;

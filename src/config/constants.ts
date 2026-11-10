@@ -32,13 +32,13 @@ export const MAX_CATCHUP_TICKS = 5;
  */
 export const GRID_SIZE = 25;
 
-/** 世界地圖寬度（世界單位，4000x4000 封閉地圖） */
-export const WORLD_WIDTH = 4000;
+/** 世界地圖寬度（世界單位，8000x8000 封閉地圖） */
+export const WORLD_WIDTH = 8000;
 
-/** 世界地圖高度（世界單位，4000x4000 封閉地圖） */
-export const WORLD_HEIGHT = 4000;
+/** 世界地圖高度（世界單位，8000x8000 封閉地圖） */
+export const WORLD_HEIGHT = 8000;
 
-/** 地圖正方形尺寸（4000 世界單位） */
+/** 地圖正方形尺寸（8000 世界單位） */
 export const MAP_SIZE = WORLD_WIDTH;
 
 /**
@@ -203,18 +203,18 @@ export const BASE_BARREL_RECOIL_OFFSET = 8.0;
  */
 export const BARREL_RECOIL_DECAY_PER_TICK = 0.65;
 
-/** 子彈物件池預先配置容量 */
-export const BULLET_POOL_CAPACITY = 1024;
+/** 子彈物件池預先配置容量 (M8 擴展至 3072) */
+export const BULLET_POOL_CAPACITY = 3072;
 
 // ==========================================
 // 6. 形狀生態與規格
 // ==========================================
 
-/** 場上目標形狀總數 */
-export const SHAPE_TARGET_COUNT = 500;
+/** 場上目標形狀總數 (M8 8000x8000 擴展至 1400) */
+export const SHAPE_TARGET_COUNT = 1400;
 
-/** 形狀預先配置最大容量 */
-export const SHAPE_CAPACITY = 600;
+/** 形狀預先配置最大容量 (M8 擴展至 1600) */
+export const SHAPE_CAPACITY = 1600;
 
 /**
  * 形狀尺寸半徑（世界單位）

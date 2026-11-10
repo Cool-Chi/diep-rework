@@ -58,8 +58,8 @@ export class SpatialHash {
     worldWidth = WORLD_WIDTH,
     worldHeight = WORLD_HEIGHT,
     cellSize = SPATIAL_HASH_CELL_SIZE,
-    maxEntities = 4096,
-    maxQueryResults = 1024,
+    maxEntities = 8192,
+    maxQueryResults = 2048,
   ) {
     this.cellSize = cellSize;
     this.cols = Math.ceil(worldWidth / cellSize);

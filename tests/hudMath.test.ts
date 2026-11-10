@@ -23,21 +23,27 @@ describe('HUD Math and Pure Layout Functions (M3b)', () => {
     expect(scoreProgress(45, 99999)).toBe(1.0);
   });
 
-  it('worldToMinimap correctly transforms 4000x4000 world coordinates to minimap space', () => {
+  it('worldToMinimap correctly transforms 8000x8000 world coordinates to minimap space', () => {
     const mapSize = 140;
 
     // 四個世界邊角
     expect(worldToMinimap(0, 0, mapSize)).toEqual({ x: 0, y: 0 });
-    expect(worldToMinimap(4000, 0, mapSize)).toEqual({ x: 140, y: 0 });
-    expect(worldToMinimap(0, 4000, mapSize)).toEqual({ x: 0, y: 140 });
-    expect(worldToMinimap(4000, 4000, mapSize)).toEqual({ x: 140, y: 140 });
+    expect(worldToMinimap(8000, 0, mapSize)).toEqual({ x: 140, y: 0 });
+    expect(worldToMinimap(0, 8000, mapSize)).toEqual({ x: 0, y: 140 });
+    expect(worldToMinimap(8000, 8000, mapSize)).toEqual({ x: 140, y: 140 });
 
     // 世界中心
-    expect(worldToMinimap(2000, 2000, mapSize)).toEqual({ x: 70, y: 70 });
+    expect(worldToMinimap(4000, 4000, mapSize)).toEqual({ x: 70, y: 70 });
 
     // 邊界外座標夾取 (Clamp)
     expect(worldToMinimap(-100, -50, mapSize)).toEqual({ x: 0, y: 0 });
-    expect(worldToMinimap(5000, 4500, mapSize)).toEqual({ x: 140, y: 140 });
+    expect(worldToMinimap(9000, 8500, mapSize)).toEqual({ x: 140, y: 140 });
+
+    // 支援自訂地圖尺寸 (如 4000x4000)
+    expect(worldToMinimap(2000, 2000, mapSize, 4000, 4000)).toEqual({
+      x: 70,
+      y: 70,
+    });
   });
 
   it('shouldShowHealthBar shows only when entity is damaged and alive', () => {

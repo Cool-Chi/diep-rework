@@ -1,3 +1,4 @@
+import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
 import { MAX_LEVEL, SCORE_FOR_LEVEL } from '../config/levels.config';
 
 /**
@@ -32,15 +33,15 @@ export function scoreProgress(level: number, score: number): number {
  * @param worldX 世界 X 座標
  * @param worldY 世界 Y 座標
  * @param mapSize 小地圖尺寸 (像素)
- * @param worldWidth 世界總寬度 (預設 4000)
- * @param worldHeight 世界總高度 (預設 4000)
+ * @param worldWidth 世界總寬度 (預設 WORLD_WIDTH)
+ * @param worldHeight 世界總高度 (預設 WORLD_HEIGHT)
  */
 export function worldToMinimap(
   worldX: number,
   worldY: number,
   mapSize: number,
-  worldWidth = 4000,
-  worldHeight = 4000,
+  worldWidth = WORLD_WIDTH,
+  worldHeight = WORLD_HEIGHT,
 ): { x: number; y: number } {
   const normX = Math.max(0, Math.min(1, worldX / worldWidth));
   const normY = Math.max(0, Math.min(1, worldY / worldHeight));

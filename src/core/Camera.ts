@@ -2,6 +2,8 @@ import {
   CAMERA_BASE_SCALE,
   CAMERA_SMOOTH_K,
   FOV_LEVEL_SCALING,
+  WORLD_HEIGHT,
+  WORLD_WIDTH,
 } from '../config/constants';
 
 export interface VisibleBounds {
@@ -23,10 +25,10 @@ export interface Point2D {
  * 負責跟隨插值後的目標位置、與幀率無關的平滑逼近、FOV 視圖縮放與螢幕-世界座標互轉
  */
 export class Camera {
-  public x = 2000;
-  public y = 2000;
-  public targetX = 2000;
-  public targetY = 2000;
+  public x = WORLD_WIDTH * 0.5;
+  public y = WORLD_HEIGHT * 0.5;
+  public targetX = WORLD_WIDTH * 0.5;
+  public targetY = WORLD_HEIGHT * 0.5;
 
   public screenWidth = 800;
   public screenHeight = 600;
@@ -59,7 +61,7 @@ export class Camera {
   private readonly tempWorldPoint: Point2D = { x: 0, y: 0 };
   private readonly tempScreenPoint: Point2D = { x: 0, y: 0 };
 
-  constructor(startX = 2000, startY = 2000) {
+  constructor(startX = WORLD_WIDTH * 0.5, startY = WORLD_HEIGHT * 0.5) {
     this.x = startX;
     this.y = startY;
     this.targetX = startX;
@@ -72,8 +74,12 @@ export class Camera {
    */
   public get scale(): number {
     if (this.isGodView) {
-      // 上帝鳥瞰視角：將 4000x4000 封閉地圖完整縮放至螢幕內 (4200 單位留安全邊距)
-      return Math.min(this.screenWidth / 4200, this.screenHeight / 4200);
+      // 上帝鳥瞰視角：將封閉地圖完整縮放至螢幕內 (留 400 單位安全邊距)
+      const mapMargin = 400;
+      return Math.min(
+        this.screenWidth / (WORLD_WIDTH + mapMargin),
+        this.screenHeight / (WORLD_HEIGHT + mapMargin),
+      );
     }
     const levelFactor = 1 + (this.targetLevel - 1) * this.fovLevelScaling;
     return this.baseScale / (this.fovMultiplier * levelFactor);
@@ -119,8 +125,8 @@ export class Camera {
    */
   public setTarget(x: number, y: number): void {
     if (this.isGodView) {
-      this.targetX = 2000;
-      this.targetY = 2000;
+      this.targetX = WORLD_WIDTH * 0.5;
+      this.targetY = WORLD_HEIGHT * 0.5;
       return;
     }
     if (this.spectateTarget) {
@@ -141,8 +147,8 @@ export class Camera {
     if (dtSeconds <= 0) return;
 
     if (this.isGodView) {
-      this.targetX = 2000;
-      this.targetY = 2000;
+      this.targetX = WORLD_WIDTH * 0.5;
+      this.targetY = WORLD_HEIGHT * 0.5;
     } else if (this.spectateTarget) {
       this.targetX = this.spectateTarget.x;
       this.targetY = this.spectateTarget.y;

@@ -9,6 +9,7 @@ import { Tank } from '../src/entities/Tank';
 describe('Milestone 5: AISystem (Tactical Bot Decision & Combat)', () => {
   it('switches from farming to engaging when an enemy tank enters perception radius', () => {
     const aiSystem = new AISystem();
+    aiSystem.ignorePlayer = false;
     const bot = new Tank(1001, 1000, 1000);
     bot.isAi = true;
     bot.active = true;
@@ -32,6 +33,7 @@ describe('Milestone 5: AISystem (Tactical Bot Decision & Combat)', () => {
 
   it('calculates predictive lead aiming against a moving target during combat', () => {
     const aiSystem = new AISystem();
+    aiSystem.ignorePlayer = false;
     const bot = new Tank(1001, 1000, 1000);
     bot.isAi = true;
     bot.active = true;
@@ -56,6 +58,7 @@ describe('Milestone 5: AISystem (Tactical Bot Decision & Combat)', () => {
 
   it('retreats when HP drops below 35% and utilizes reverse recoil firing to escape', () => {
     const aiSystem = new AISystem();
+    aiSystem.ignorePlayer = false;
     const bot = new Tank(1001, 1000, 1000);
     bot.isAi = true;
     bot.active = true;
@@ -240,6 +243,7 @@ describe('Milestone 5: AISystem (Tactical Bot Decision & Combat)', () => {
 
   it('retreats when low HP with active threat, and smoothly returns to farming when threat clears', () => {
     const aiSystem = new AISystem();
+    aiSystem.ignorePlayer = false;
     const bot = new Tank(1001, 1000, 1000);
     bot.isAi = true;
     bot.active = true;
@@ -279,6 +283,7 @@ describe('Milestone 5: AISystem (Tactical Bot Decision & Combat)', () => {
 
   it('dynamically retargets to immediate closer threats during combat', () => {
     const aiSystem = new AISystem();
+    aiSystem.ignorePlayer = false;
     const bot = new Tank(1001, 1000, 1000);
     bot.isAi = true;
     bot.active = true;
@@ -300,5 +305,32 @@ describe('Milestone 5: AISystem (Tactical Bot Decision & Combat)', () => {
     // 應該自動切換鎖定更具威脅的近距離目標
     expect(bot.aiTargetId).toBe(immediateThreat.id);
     expect(bot.input.aimX).toBeCloseTo(1150, 0);
+  });
+
+  it('ignores player tank when ignorePlayer is true, and targets player when false', () => {
+    const aiSystem = new AISystem();
+    expect(aiSystem.ignorePlayer).toBe(true); // default true
+
+    const bot = new Tank(1001, 1000, 1000);
+    bot.isAi = true;
+    bot.active = true;
+
+    const player = new Tank(1, 1200, 1000); // 玩家在感知半徑內 (距離 200)
+    player.active = true;
+
+    const shapes: Shape[] = [];
+    const allTanks = [player, bot];
+    const bulletPool = new ObjectPool<Bullet>(16, () => new Bullet());
+
+    // 1. ignorePlayer = true 時，AI 忽視玩家，不進入 engaging
+    aiSystem.update([bot], shapes, allTanks, bulletPool, 1);
+    expect(bot.aiState).toBe('farming');
+    expect(bot.aiTargetId).toBe(-1);
+
+    // 2. 切換 ignorePlayer = false，AI 立即進入 engaging 鎖定玩家
+    aiSystem.ignorePlayer = false;
+    aiSystem.update([bot], shapes, allTanks, bulletPool, 2);
+    expect(bot.aiState).toBe('engaging');
+    expect(bot.aiTargetId).toBe(player.id);
   });
 });

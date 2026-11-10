@@ -4,6 +4,7 @@ import {
   BASE_BULLET_SPEED,
   BULLET_LIFESPAN_TICKS,
   BULLET_POOL_CAPACITY,
+  SHAPE_TARGET_COUNT,
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../src/config/constants';
@@ -30,9 +31,9 @@ describe('Performance Stress Test (M2: 500 Shapes + 600 Bullets)', () => {
 
     const playerTank = new Tank(1, WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
 
-    // 1. 初始化 500 個形狀
+    // 1. 初始化目標數量形狀
     shapeSystem.fillToTarget();
-    expect(shapeSystem.activeCount).toBe(500);
+    expect(shapeSystem.activeCount).toBe(SHAPE_TARGET_COUNT);
 
     // 2. 發射 600 顆子彈（360 度輻射）
     const count = 600;

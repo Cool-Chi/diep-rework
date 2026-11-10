@@ -7,7 +7,7 @@ import { isInBounds } from './culling';
 import { getRenderPosition, type RenderPositionOut } from './getRenderPosition';
 import { TankRenderer } from './TankRenderer';
 
-export const MULTI_TANK_POOL_CAPACITY = 32;
+export const MULTI_TANK_POOL_CAPACITY = 48;
 
 interface TankRenderItem {
   container: Container;
@@ -37,7 +37,7 @@ export function interpolateAngle(
 
 /**
  * 多坦克集中渲染器 (MultiTankRenderer)
- * 預先配置 32 個渲染項目池，嚴格實施視錐剔除 (isInBounds) 與零 GC 物件複用，
+ * 預先配置 48 個渲染項目池，嚴格實施視錐剔除 (isInBounds) 與零 GC 物件複用，
  * 同時支援頭頂擬真暱稱與除錯戰術標籤。
  */
 export class MultiTankRenderer {
@@ -185,15 +185,15 @@ export class MultiTankRenderer {
         item.container.alpha = 1.0;
       }
 
-      // 6. 計算標籤縮放 (在上帝視角下逆向放大，保證俯瞰時清晰可辨)
+      // 6. 計算標籤縮放 (在上帝視角下適度放大，既清晰可見又避免相鄰坦克字體相互重疊)
       const labelScale = isGodView
-        ? Math.min(3.2, Math.max(1.0, 0.85 / Math.max(cameraScale, 0.05)))
+        ? Math.min(6.5, Math.max(1.0, 0.55 / Math.max(cameraScale, 0.05)))
         : 1.0;
       item.nameText.scale.set(labelScale);
-      item.stateText.scale.set(labelScale);
+      item.stateText.scale.set(labelScale * 0.85);
 
       // 更新頭頂暱稱位置（置於本體上方，血條下方）
-      const textY = ry - visualRadius - 8 * labelScale;
+      const textY = ry - visualRadius - 5 * labelScale;
       item.nameText.position.set(rx, textY);
       item.nameText.visible = true;
 
@@ -213,7 +213,7 @@ export class MultiTankRenderer {
         }
         item.stateText.tint = stateColor;
 
-        item.stateText.position.set(rx, textY - 14 * labelScale);
+        item.stateText.position.set(rx, textY - 10 * labelScale);
         item.stateText.visible = true;
       } else {
         item.stateText.visible = false;
