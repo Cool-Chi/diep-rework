@@ -33,6 +33,7 @@ export class Camera {
 
   public fovMultiplier = 1.0;
   public targetLevel = 1;
+  public fovLevelScaling = FOV_LEVEL_SCALING;
   public baseScale: number = CAMERA_BASE_SCALE;
   public smoothK: number = CAMERA_SMOOTH_K;
 
@@ -61,7 +62,7 @@ export class Camera {
    * 縮放 = CAMERA_BASE_SCALE ÷ (fovMultiplier * 等級視野放大率)
    */
   public get scale(): number {
-    const levelFactor = 1 + (this.targetLevel - 1) * FOV_LEVEL_SCALING;
+    const levelFactor = 1 + (this.targetLevel - 1) * this.fovLevelScaling;
     return this.baseScale / (this.fovMultiplier * levelFactor);
   }
 

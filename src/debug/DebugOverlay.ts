@@ -1,10 +1,17 @@
 import { BASE_BULLET_RADIUS, BULLET_LIFESPAN_TICKS } from '../config/constants';
+import { MAX_LEVEL, SCORE_FOR_LEVEL } from '../config/levels.config';
+import {
+  STAT_BULLET_DAMAGE,
+  STAT_BULLET_PENETRATION,
+  STAT_MAX_HEALTH,
+  STAT_RELOAD,
+} from '../config/stats.config';
 import type { Game } from '../core/Game';
 
 /**
  * 完整開發除錯面板 (DebugOverlay)
  * 僅在 import.meta.env.DEV 環境動態載入，按 Backquote (`) 開啟/關閉
- * 採用純 DOM 實作，事件嚴格隔離，具備效能指標、渲染耗時、壓力測試與常數即時微調
+ * 採用純 DOM 實作，事件嚴格隔離，具備效能指標、渲染耗時、等級加點、壓力測試與常數即時微調
  */
 export class DebugOverlay {
   private element: HTMLDivElement | null = null;
@@ -148,6 +155,17 @@ export class DebugOverlay {
     const pressedKeys = this.game.inputManager.getPressedKeys();
     const pressedStr = pressedKeys.length > 0 ? pressedKeys.join(', ') : 'none';
 
+    const nextScore =
+      tank.level >= MAX_LEVEL
+        ? 'MAX'
+        : SCORE_FOR_LEVEL[Math.min(tank.level, MAX_LEVEL - 1)].toString();
+
+    const statsArr = `[${Array.from(tank.statLevels).join(', ')}]`;
+    const fovVal = (
+      this.game.camera.fovMultiplier *
+      (1 + (tank.level - 1) * this.game.camera.fovLevelScaling)
+    ).toFixed(3);
+
     this.metricsElement.innerHTML = `
       <div style="font-weight:bold;color:#00ffcc;margin-bottom:6px;">[DEBUG PANEL] (Toggle: \`)</div>
       <div>FPS: <b>${this.currentFps}</b> | TPS: <b>${this.currentTps}</b> (target 25)</div>
@@ -155,8 +173,15 @@ export class DebugOverlay {
       <div>Render Duration: avg <b>${this.avgRenderMs.toFixed(2)}ms</b> | max <b>${this.maxRenderMs.toFixed(2)}ms</b></div>
       <div>Bullets: ${bulletAlert ? `<b style="color:#ff3333">${activeBullets} active / ${visibleBullets} visible [ALERT: INVISIBLE!]</b>` : `<b>${activeBullets}</b> active / <b>${visibleBullets}</b> visible`}</div>
       <div>Shapes: ${shapeAlert ? `<b style="color:#ff3333">${activeShapes} active / ${visibleShapes} visible [ALERT: INVISIBLE!]</b>` : `<b>${activeShapes}</b> active / <b>${visibleShapes}</b> visible`}</div>
-      <div>Tank HP: <b>${Math.ceil(tank.hp)}</b> / ${tank.maxHp}</div>
-      <div>Pressed Keys: <b style="color:#ffff00">${pressedStr}</b></div>
+      <div style="border-top:1px dashed rgba(255,255,255,0.15);margin:4px 0;padding-top:4px;">
+        Level: <b style="color:#ffff00">${tank.level}</b>/30 | Score: <b>${tank.score}</b> (next: <b>${nextScore}</b>)
+      </div>
+      <div>Unspent Points: <b style="color:#00ff88">${tank.statPoints}</b> | Stats [1~8]: <b style="color:#33ccff">${statsArr}</b></div>
+      <div>HP: <b>${Math.ceil(tank.hp)}</b>/${tank.maxHp} | Reload: <b>${tank.reloadTicks}t</b> | BulletSpd: <b>${tank.bulletSpeed.toFixed(2)}</b></div>
+      <div>BulletHP: <b>${tank.bulletHp}</b> | BulletDmg: <b>${tank.bulletDamage}</b> | Radius: <b>${tank.radius.toFixed(1)}</b> | FOV: <b>${fovVal}</b></div>
+      <div style="border-top:1px dashed rgba(255,255,255,0.15);margin:4px 0;padding-top:4px;">
+        Pressed Keys: <b style="color:#ffff00">${pressedStr}</b>
+      </div>
       <div>Shapes Destroyed: <b>${this.shapeDestroyedCount}</b> | Tank Deaths: <b>${this.tankDiedCount}</b></div>
       <div>God Mode: <b style="color:${this.isGodMode ? '#00ff88' : '#ff5555'}">${this.isGodMode ? 'ON' : 'OFF'}</b></div>
     `;
@@ -169,7 +194,7 @@ export class DebugOverlay {
     el.style.top = '10px';
     el.style.left = '10px';
     el.style.padding = '12px 16px';
-    el.style.backgroundColor = 'rgba(15, 20, 28, 0.88)';
+    el.style.backgroundColor = 'rgba(15, 20, 28, 0.9)';
     el.style.color = '#e0e0e0';
     el.style.fontFamily = 'Consolas, monospace';
     el.style.fontSize = '12px';
@@ -177,9 +202,11 @@ export class DebugOverlay {
     el.style.boxShadow = '0 4px 16px rgba(0,0,0,0.4)';
     el.style.border = '1px solid rgba(255,255,255,0.15)';
     el.style.zIndex = '999999';
-    el.style.lineHeight = '1.5';
+    el.style.lineHeight = '1.45';
     el.style.userSelect = 'none';
-    el.style.maxWidth = '360px';
+    el.style.maxWidth = '380px';
+    el.style.maxHeight = '90vh';
+    el.style.overflowY = 'auto';
 
     // 關鍵：只阻擋滑鼠與 pointer 事件傳給遊戲，不阻擋鍵盤事件（確保 keyup 永遠能被接收）
     const stopPropagation = (e: Event) => e.stopPropagation();
@@ -195,14 +222,14 @@ export class DebugOverlay {
     const hr1 = document.createElement('hr');
     hr1.style.border = '0';
     hr1.style.borderTop = '1px solid rgba(255,255,255,0.15)';
-    hr1.style.margin = '10px 0';
+    hr1.style.margin = '8px 0';
     el.appendChild(hr1);
 
     // 2. 快捷動作按鈕區
     const btnContainer = document.createElement('div');
     btnContainer.style.display = 'grid';
     btnContainer.style.gridTemplateColumns = '1fr 1fr';
-    btnContainer.style.gap = '6px';
+    btnContainer.style.gap = '5px';
 
     const createBtn = (
       text: string,
@@ -211,7 +238,7 @@ export class DebugOverlay {
     ) => {
       const b = document.createElement('button');
       b.textContent = text;
-      b.style.padding = '5px 8px';
+      b.style.padding = '4px 6px';
       b.style.backgroundColor = color;
       b.style.color = '#ffffff';
       b.style.border = '1px solid rgba(255,255,255,0.2)';
@@ -240,6 +267,123 @@ export class DebugOverlay {
       this.renderMetrics();
     });
     btnContainer.appendChild(fillShapeBtn);
+
+    // +100 分數按鈕
+    const add100Btn = createBtn('+100 Score', () => {
+      this.game.levelingSystem.addScore(
+        this.game.playerTank,
+        100,
+        this.game.eventBus,
+      );
+      this.renderMetrics();
+    });
+    btnContainer.appendChild(add100Btn);
+
+    // +1000 分數按鈕
+    const add1000Btn = createBtn('+1000 Score', () => {
+      this.game.levelingSystem.addScore(
+        this.game.playerTank,
+        100,
+        this.game.eventBus,
+      );
+      this.game.levelingSystem.addScore(
+        this.game.playerTank,
+        900,
+        this.game.eventBus,
+      );
+      this.renderMetrics();
+    });
+    btnContainer.appendChild(add1000Btn);
+
+    // 升至 Lv 15 按鈕 (787 分)
+    const lv15Btn = createBtn(
+      'Level 15 (787)',
+      () => {
+        const tank = this.game.playerTank;
+        if (tank.score < 787) {
+          this.game.levelingSystem.addScore(
+            tank,
+            787 - tank.score,
+            this.game.eventBus,
+          );
+        }
+        this.renderMetrics();
+      },
+      '#2a6478',
+    );
+    btnContainer.appendChild(lv15Btn);
+
+    // 升至 Lv 30 按鈕 (6184 分)
+    const lv30Btn = createBtn(
+      'Level 30 (6184)',
+      () => {
+        const tank = this.game.playerTank;
+        if (tank.score < 6184) {
+          this.game.levelingSystem.addScore(
+            tank,
+            6184 - tank.score,
+            this.game.eventBus,
+          );
+        }
+        this.renderMetrics();
+      },
+      '#5c3a78',
+    );
+    btnContainer.appendChild(lv30Btn);
+
+    // 一鍵升至 Lv 30 並點滿 28 點
+    const autoMaxBtn = createBtn(
+      'Auto-Max 28 Pts',
+      () => {
+        const tank = this.game.playerTank;
+        if (tank.score < 6184) {
+          this.game.levelingSystem.addScore(
+            tank,
+            6184 - tank.score,
+            this.game.eventBus,
+          );
+        }
+        for (let p = 0; p < 7; p++) {
+          this.game.levelingSystem.spendStatPoint(
+            tank,
+            STAT_MAX_HEALTH,
+            this.game.eventBus,
+          );
+          this.game.levelingSystem.spendStatPoint(
+            tank,
+            STAT_BULLET_PENETRATION,
+            this.game.eventBus,
+          );
+          this.game.levelingSystem.spendStatPoint(
+            tank,
+            STAT_BULLET_DAMAGE,
+            this.game.eventBus,
+          );
+          this.game.levelingSystem.spendStatPoint(
+            tank,
+            STAT_RELOAD,
+            this.game.eventBus,
+          );
+        }
+        this.renderMetrics();
+      },
+      '#784c2a',
+    );
+    btnContainer.appendChild(autoMaxBtn);
+
+    // 重設屬性與等級
+    const resetBtn = createBtn(
+      'Reset Stats (Lv1)',
+      () => {
+        this.game.levelingSystem.resetTank(
+          this.game.playerTank,
+          this.game.eventBus,
+        );
+        this.renderMetrics();
+      },
+      '#555555',
+    );
+    btnContainer.appendChild(resetBtn);
 
     // 清空子彈按鈕
     const clearBulletBtn = createBtn('Clear Bullets', () => {
@@ -277,7 +421,7 @@ export class DebugOverlay {
     const hr2 = document.createElement('hr');
     hr2.style.border = '0';
     hr2.style.borderTop = '1px solid rgba(255,255,255,0.15)';
-    hr2.style.margin = '10px 0';
+    hr2.style.margin = '8px 0';
     el.appendChild(hr2);
 
     // 3. 常數即時調參滑桿區 (TODO(tune))
@@ -293,10 +437,10 @@ export class DebugOverlay {
       setValue: (val: number) => void,
     ) => {
       const row = document.createElement('div');
-      row.style.marginBottom = '6px';
+      row.style.marginBottom = '5px';
 
       const labelSpan = document.createElement('span');
-      labelSpan.textContent = `${label}: ${getValue().toFixed(2)}`;
+      labelSpan.textContent = `${label}: ${getValue().toFixed(3)}`;
 
       const input = document.createElement('input');
       input.type = 'range';
@@ -310,7 +454,7 @@ export class DebugOverlay {
       input.addEventListener('input', () => {
         const val = Number.parseFloat(input.value);
         setValue(val);
-        labelSpan.textContent = `${label}: ${val.toFixed(2)}`;
+        labelSpan.textContent = `${label}: ${val.toFixed(3)}`;
       });
 
       // 操作結束後失焦，把焦點還給遊戲 canvas
@@ -384,6 +528,26 @@ export class DebugOverlay {
       () => this.game.collisionSystem.knockbackFactor,
       (v) => {
         this.game.collisionSystem.knockbackFactor = v;
+      },
+    );
+    createSlider(
+      'FOV Level Scaling',
+      0.0,
+      0.03,
+      0.001,
+      () => this.game.camera.fovLevelScaling,
+      (v) => {
+        this.game.camera.fovLevelScaling = v;
+      },
+    );
+    createSlider(
+      'Hyper Regen %/sec',
+      0.01,
+      0.5,
+      0.01,
+      () => this.game.regenSystem.hyperRegenPercent,
+      (v) => {
+        this.game.regenSystem.hyperRegenPercent = v;
       },
     );
 

@@ -52,9 +52,10 @@ export function getHealthRegenPerTick(
   maxHp: number,
   p: number,
   isHyper = false,
+  hyperPercent = HYPER_REGEN_PERCENT_PER_SEC,
 ): number {
   const baseRegenPerSec = (maxHp * (0.03 + 0.12 * p)) / 30;
-  const hyperRegenPerSec = isHyper ? maxHp * HYPER_REGEN_PERCENT_PER_SEC : 0;
+  const hyperRegenPerSec = isHyper ? maxHp * hyperPercent : 0;
   return (baseRegenPerSec + hyperRegenPerSec) / SIM_TICK_RATE;
 }
 

@@ -1,4 +1,7 @@
-import { HYPER_REGEN_TICKS } from '../config/constants';
+import {
+  HYPER_REGEN_PERCENT_PER_SEC,
+  HYPER_REGEN_TICKS,
+} from '../config/constants';
 import {
   getHealthRegenPerTick,
   STAT_HEALTH_REGEN,
@@ -10,6 +13,8 @@ import type { Tank } from '../entities/Tank';
  * 負責每個模擬 tick 推進自然生命恢復與 30 秒加速回血 (Hyper Regen)
  */
 export class RegenSystem {
+  public hyperRegenPercent: number = HYPER_REGEN_PERCENT_PER_SEC;
+
   /**
    * 每個模擬 tick 更新所有坦克的生命恢復狀態
    * @param tanks 場上坦克列表
@@ -29,6 +34,7 @@ export class RegenSystem {
           tank.maxHp,
           tank.statLevels[STAT_HEALTH_REGEN],
           true,
+          this.hyperRegenPercent,
         );
       }
 
