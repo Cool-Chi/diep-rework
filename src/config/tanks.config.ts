@@ -19,6 +19,7 @@ export interface BarrelConfig {
   bulletDamageMultiplier: number;
   bulletPenMultiplier: number;
   bulletSizeMultiplier: number;
+  bulletLifespanTicks?: number; // 子彈飛行壽命 (ticks，未填則使用預設 BULLET_LIFESPAN_TICKS = 75)
 }
 
 export type TankClassId =
@@ -70,6 +71,7 @@ export const BASIC_TANK_DEFINITION: TankDefinition = {
       bulletDamageMultiplier: 1.0,
       bulletPenMultiplier: 1.0,
       bulletSizeMultiplier: 1.0,
+      bulletLifespanTicks: 75,
     },
   ],
 };
@@ -98,8 +100,9 @@ export const TWIN_TANK_DEFINITION: TankDefinition = {
       recoilMultiplier: 0.75,
       bulletSpeedMultiplier: 1.0,
       bulletDamageMultiplier: 0.65,
-      bulletPenMultiplier: 0.7,
-      bulletSizeMultiplier: 1.0,
+      bulletPenMultiplier: 0.9,
+      bulletSizeMultiplier: 0.9,
+      bulletLifespanTicks: 75,
     },
     {
       length: BASE_BARREL_LENGTH,
@@ -113,8 +116,9 @@ export const TWIN_TANK_DEFINITION: TankDefinition = {
       recoilMultiplier: 0.75,
       bulletSpeedMultiplier: 1.0,
       bulletDamageMultiplier: 0.65,
-      bulletPenMultiplier: 0.7,
-      bulletSizeMultiplier: 1.0,
+      bulletPenMultiplier: 0.9,
+      bulletSizeMultiplier: 0.9,
+      bulletLifespanTicks: 75,
     },
   ],
 };
@@ -142,9 +146,10 @@ export const SNIPER_TANK_DEFINITION: TankDefinition = {
       reloadMultiplier: 1.5, // 裝填時間增長至 1.5x
       recoilMultiplier: 1.25,
       bulletSpeedMultiplier: 1.5, // 子彈速度 1.5x
-      bulletDamageMultiplier: 1.25, // 子彈殺傷力提升
-      bulletPenMultiplier: 1.0,
+      bulletDamageMultiplier: 1.2, // 子彈殺傷力提升
+      bulletPenMultiplier: 1.1,
       bulletSizeMultiplier: 1.0,
+      bulletLifespanTicks: 105,
     },
   ],
 };
@@ -174,8 +179,9 @@ export const MACHINE_GUN_TANK_DEFINITION: TankDefinition = {
       recoilMultiplier: 0.8,
       bulletSpeedMultiplier: 0.9,
       bulletDamageMultiplier: 0.7,
-      bulletPenMultiplier: 0.75,
+      bulletPenMultiplier: 0.8,
       bulletSizeMultiplier: 1.0,
+      bulletLifespanTicks: 65,
     },
   ],
 };
@@ -206,6 +212,7 @@ export const FLANK_GUARD_TANK_DEFINITION: TankDefinition = {
       bulletDamageMultiplier: 1.0,
       bulletPenMultiplier: 1.0,
       bulletSizeMultiplier: 1.0,
+      bulletLifespanTicks: 75,
     },
     {
       length: 30, // 後管略短為 30 單位
@@ -221,6 +228,7 @@ export const FLANK_GUARD_TANK_DEFINITION: TankDefinition = {
       bulletDamageMultiplier: 0.8,
       bulletPenMultiplier: 1.0,
       bulletSizeMultiplier: 1.0,
+      bulletLifespanTicks: 75,
     },
   ],
 };
@@ -249,8 +257,9 @@ export const TRIPLE_SHOT_TANK_DEFINITION: TankDefinition = {
       recoilMultiplier: 0.7,
       bulletSpeedMultiplier: 1.0,
       bulletDamageMultiplier: 0.7,
-      bulletPenMultiplier: 0.8,
-      bulletSizeMultiplier: 1.0,
+      bulletPenMultiplier: 1.0,
+      bulletSizeMultiplier: 0.9,
+      bulletLifespanTicks: 75,
     },
     {
       length: BASE_BARREL_LENGTH,
@@ -264,8 +273,9 @@ export const TRIPLE_SHOT_TANK_DEFINITION: TankDefinition = {
       recoilMultiplier: 0.7,
       bulletSpeedMultiplier: 1.0,
       bulletDamageMultiplier: 0.7,
-      bulletPenMultiplier: 0.8,
-      bulletSizeMultiplier: 1.0,
+      bulletPenMultiplier: 1.0,
+      bulletSizeMultiplier: 0.9,
+      bulletLifespanTicks: 75,
     },
     {
       length: BASE_BARREL_LENGTH,
@@ -279,8 +289,9 @@ export const TRIPLE_SHOT_TANK_DEFINITION: TankDefinition = {
       recoilMultiplier: 0.7,
       bulletSpeedMultiplier: 1.0,
       bulletDamageMultiplier: 0.7,
-      bulletPenMultiplier: 0.8,
-      bulletSizeMultiplier: 1.0,
+      bulletPenMultiplier: 1.0,
+      bulletSizeMultiplier: 0.9,
+      bulletLifespanTicks: 75,
     },
   ],
 };
@@ -308,9 +319,10 @@ export const ASSASSIN_TANK_DEFINITION: TankDefinition = {
       reloadMultiplier: 1.67,
       recoilMultiplier: 1.25,
       bulletSpeedMultiplier: 1.6, // 子彈速度 1.6x
-      bulletDamageMultiplier: 1.3,
-      bulletPenMultiplier: 1.0,
+      bulletDamageMultiplier: 1.25,
+      bulletPenMultiplier: 1.15,
       bulletSizeMultiplier: 1.0,
+      bulletLifespanTicks: 125,
     },
   ],
 };
@@ -338,10 +350,11 @@ export const DESTROYER_TANK_DEFINITION: TankDefinition = {
       fireDelayRatio: 0,
       reloadMultiplier: 3.0, // 裝填時間 3.0x (高威力慢速)
       recoilMultiplier: 3.5, // 3.5x 強烈後座力 (火箭推進)
-      bulletSpeedMultiplier: 0.85,
-      bulletDamageMultiplier: 3.0, // 3x 毀滅殺傷力
-      bulletPenMultiplier: 2.5, // 2.5x 巨彈穿透
+      bulletSpeedMultiplier: 0.75, // 原版比 Machine Gun 慢 1.5x (~0.75x)
+      bulletDamageMultiplier: 3.5, // 3.5x 毀滅殺傷力 (原版 wiki 30/7 ~ 4.28x)
+      bulletPenMultiplier: 2.0, // 2x 巨彈穿透 (原版 wiki doubled)
       bulletSizeMultiplier: 2.0, // 2x 巨型砲彈
+      bulletLifespanTicks: 70,
     },
   ],
 };
@@ -370,9 +383,10 @@ export const TWIN_FLANK_TANK_DEFINITION: TankDefinition = {
       reloadMultiplier: 1.0,
       recoilMultiplier: 0.6,
       bulletSpeedMultiplier: 1.0,
-      bulletDamageMultiplier: 0.65,
-      bulletPenMultiplier: 0.7,
-      bulletSizeMultiplier: 1.0,
+      bulletDamageMultiplier: 0.6,
+      bulletPenMultiplier: 0.8,
+      bulletSizeMultiplier: 0.9,
+      bulletLifespanTicks: 75,
     },
     {
       length: BASE_BARREL_LENGTH,
@@ -385,9 +399,10 @@ export const TWIN_FLANK_TANK_DEFINITION: TankDefinition = {
       reloadMultiplier: 1.0,
       recoilMultiplier: 0.6,
       bulletSpeedMultiplier: 1.0,
-      bulletDamageMultiplier: 0.65,
-      bulletPenMultiplier: 0.7,
-      bulletSizeMultiplier: 1.0,
+      bulletDamageMultiplier: 0.6,
+      bulletPenMultiplier: 0.8,
+      bulletSizeMultiplier: 0.9,
+      bulletLifespanTicks: 75,
     },
     // 後方雙管
     {
@@ -401,9 +416,10 @@ export const TWIN_FLANK_TANK_DEFINITION: TankDefinition = {
       reloadMultiplier: 1.0,
       recoilMultiplier: 0.6,
       bulletSpeedMultiplier: 1.0,
-      bulletDamageMultiplier: 0.65,
-      bulletPenMultiplier: 0.7,
-      bulletSizeMultiplier: 1.0,
+      bulletDamageMultiplier: 0.6,
+      bulletPenMultiplier: 0.8,
+      bulletSizeMultiplier: 0.9,
+      bulletLifespanTicks: 75,
     },
     {
       length: BASE_BARREL_LENGTH,
@@ -416,9 +432,10 @@ export const TWIN_FLANK_TANK_DEFINITION: TankDefinition = {
       reloadMultiplier: 1.0,
       recoilMultiplier: 0.6,
       bulletSpeedMultiplier: 1.0,
-      bulletDamageMultiplier: 0.65,
-      bulletPenMultiplier: 0.7,
-      bulletSizeMultiplier: 1.0,
+      bulletDamageMultiplier: 0.6,
+      bulletPenMultiplier: 0.8,
+      bulletSizeMultiplier: 0.9,
+      bulletLifespanTicks: 75,
     },
   ],
 };

@@ -109,7 +109,7 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
     expect(destroyer.barrels[0].width).toBe(36);
     expect(destroyer.barrels[0].recoilMultiplier).toBe(3.5);
     expect(destroyer.barrels[0].bulletSizeMultiplier).toBe(2.0);
-    expect(destroyer.barrels[0].bulletDamageMultiplier).toBe(3.0);
+    expect(destroyer.barrels[0].bulletDamageMultiplier).toBe(3.5);
 
     const tripleShot = TANKS_CONFIG.triple_shot;
     expect(tripleShot.barrels).toHaveLength(3);

@@ -72,12 +72,19 @@ export class BulletRenderer {
         continue;
       }
 
-      sprite.visible = true;
+      // 末段平滑漸逝（alpha 1.0 -> 0.0，scale 1.0 -> 0.6）
+      const fade = bullet.fadeProgress;
+      const baseScale = bullet.radius / BASE_BULLET_RADIUS;
+      const scale = baseScale * (0.6 + 0.4 * fade);
+
       sprite.x = rx;
       sprite.y = ry;
+      sprite.scale.set(scale);
+      sprite.alpha = fade;
       if (sprite.tint !== bullet.color) {
         sprite.tint = bullet.color;
       }
+      sprite.visible = true;
       visibleCounter++;
     }
 

@@ -208,8 +208,8 @@ export class DebugOverlay {
       </div>
       <div>Class: <b style="color:#00e5ff">${tank.definition.name}</b> (Tier ${tank.definition.tier})</div>
       <div>Unspent Points: <b style="color:#00ff88">${tank.statPoints}</b> | Stats [1~8]: <b style="color:#33ccff">${statsArr}</b></div>
-      <div>HP: <b>${Math.ceil(tank.hp)}</b>/${tank.maxHp} | Reload: <b>${tank.reloadTicks}t</b> | BulletSpd: <b>${tank.bulletSpeed.toFixed(2)}</b></div>
-      <div>BulletHP: <b>${tank.bulletHp}</b> | BulletDmg: <b>${tank.bulletDamage}</b> | Radius: <b>${tank.radius.toFixed(1)}</b> | FOV: <b>${fovVal}</b></div>
+      <div>HP: <b>${Math.ceil(tank.hp)}</b>/${tank.maxHp} | Reload: <b>${tank.reloadTicks}t</b> | BulletSpd: <b>${tank.bulletSpeed.toFixed(2)}</b> | FOV: <b>${fovVal}</b></div>
+      <div>BulletHP: <b>${(tank.bulletHp * (tank.definition.barrels[0]?.bulletPenMultiplier ?? 1)).toFixed(1)}</b> | BulletDmg: <b>${(tank.bulletDamage * (tank.definition.barrels[0]?.bulletDamageMultiplier ?? 1)).toFixed(1)}</b> | BulletR: <b>${(BASE_BULLET_RADIUS * (tank.definition.barrels[0]?.bulletSizeMultiplier ?? 1)).toFixed(1)}</b> | Life: <b>${tank.definition.barrels[0]?.bulletLifespanTicks ?? 75}t</b></div>
       <div style="border-top:1px dashed rgba(255,255,255,0.15);margin:4px 0;padding-top:4px;">
         Active AI: <b style="color:#00ff88">${this.game.spawnSystem.getActiveAiCount()}</b>/20 | AI Passive: <b style="color:${this.game.aiSystem.passiveMode ? '#ffbb00' : '#00ff88'}">${this.game.aiSystem.passiveMode ? 'ON' : 'OFF'}</b>
       </div>

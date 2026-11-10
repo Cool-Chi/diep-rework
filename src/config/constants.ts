@@ -150,9 +150,15 @@ export const KILL_REWARD_RATIO = 1.0;
 
 /**
  * 子彈預設基礎半徑（世界單位）
- * TODO(tune): 未查證（約為砲管寬度的一半至略大，配合砲口直徑 18 單位設半徑 8 單位）
+ * 對齊 BASE_BARREL_WIDTH = 18 砲口寬度（直徑 18 單位 = 半徑 9 單位）
  */
-export const BASE_BULLET_RADIUS = 8;
+export const BASE_BULLET_RADIUS = 9;
+
+/**
+ * 子彈壽命末段平滑漸逝時間（ticks）
+ * TODO(tune): 末段 8 ticks（約 0.32 秒）內透明度由 1.0 降至 0，尺寸微縮至 60%
+ */
+export const BULLET_FADEOUT_TICKS = 8;
 
 /**
  * 子彈基礎速度（世界單位 / tick）
