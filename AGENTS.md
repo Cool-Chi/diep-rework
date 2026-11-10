@@ -169,3 +169,29 @@
    - **嚴禁私自 `git commit --amend` 或 force push 已回報給使用者的 commit**，除非使用者明確要求。
    - **不得額外安裝套件**：不得為了檢查 commit 格式安裝 `commitlint` 或 `husky` 等工具（維持套件白名單不變）。
    - 里程碑收尾時的 commit 規範檢查依 `/milestone-check` 流程步驟執行。
+
+---
+
+# Diep.io Clone 專案架構與常駐規範 (M4 ~ M6 階段)
+
+## 1. 使用者意圖自動轉譯 (Intent Translation)
+- 使用者輸入之需求多為白話描述或玩法感受。收到指令時，必須自動對應至本專案的 TypeScript 模組、設定檔與測試檔，不得要求使用者提供底層程式碼細節。
+
+## 2. M1 ~ M3b 核心底座紅線 (嚴禁破壞)
+- **固定步長與插值**：模擬層嚴格維持 `FixedStepper` (`SIM_TICK_RATE = 25` TPS)，所有移動、射擊冷卻、生命回復皆以 `tick` 計算；渲染層必須維持 `prevX`/`prevY` 至 `x`/`y` 的平滑插值，禁止將遊戲邏輯綁定在渲染幀率 (FPS) 上。
+- **零配置與記憶體管理**：在 `25 TPS` 模擬迴圈、碰撞檢測 (`CollisionResolver`) 與渲染更新中，嚴禁頻繁 `new` 物件或產生陣列垃圾。必須全面複用 `ObjectPool` 與基於 TypedArray 的 `SpatialHash`。
+- **共享驅動架構 (`InputCommand`)**：無論是玩家 (`InputManager` 透過 `event.code` 觸發) 或 M5 的 `AISystem`，所有坦克實體的移動與開火必須 100% 透過寫入該實體的 `InputCommand` 驅動，共用同一套 `MovementSystem` 與 `CombatSystem`，嚴禁為 AI 寫獨立的作弊移動或開火邏輯。
+- **Pixi.js v8 規範**：遵循 Pixi v8 非同步初始化與新版容器 API（如 `ParticleContainer`、`Culler`、`BitmapText`），純 HUD 元件統一掛載於 `HUD` 容器，世界動態血條掛載於 `HealthBarLayer`。
+- **代碼品質與型別安全**：嚴格遵守 Biome 規範 (`noExplicitAny`)，禁止使用 `any` 型別。
+
+## 3. 里程碑推進與 DebugOverlay 同步鐵則
+- 每推進一個子里程碑 (M4a, M4b, M5, M6)：
+  1. 必須同步擴充 `DebugOverlay`（僅在 `import.meta.env.DEV` 載入，按 `Backquote` 開啟），確保新功能具備一鍵測試按鈕（如：強制切換 M4 職業、生成/清除 M5 AI）。
+  2. 正式生產建置 (`npm run build`) 必須確保 Tree-shaking 完全剔除 `DebugOverlay`。
+
+## 4. 完成定義 (Definition of Done)
+- 任何代碼修改完成後，必須依序在終端機執行並通過：
+  1. `npm run typecheck`
+  2. `npm test` (Vitest 單元測試全過)
+  3. `npm run lint` (Biome 檢查無報錯)
+- 若涉及 UI (`EvolutionPanel`, `GameOverModal`)、相機 FOV 或砲管外觀變更，必須調用 `browsermcp` 連接已開啟的 Edge `localhost` 分頁，讀取 Console 確認 0 Error 並擷取快照驗證。
