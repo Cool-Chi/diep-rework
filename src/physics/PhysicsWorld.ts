@@ -53,6 +53,15 @@ export class PhysicsWorld {
       my *= invLen;
     }
 
+    // 重生無敵保護遞減：若主動大幅移動 (lenSq > 0.1) 則提前解除，否則每 tick 衰減 1
+    if (tank.invulnerableTicks > 0) {
+      if (lenSq > 0.1) {
+        tank.invulnerableTicks = 0;
+      } else {
+        tank.invulnerableTicks--;
+      }
+    }
+
     // 3. 加速度與速度阻尼積分：v_{t+1} = (v_t + a) * DAMPING
     const effectiveAccel = this.moveAccel * tank.moveAccelScale;
     tank.vx = (tank.vx + mx * effectiveAccel) * this.damping;

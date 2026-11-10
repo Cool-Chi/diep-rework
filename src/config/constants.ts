@@ -260,3 +260,19 @@ export const STROKE_WIDTH = 3.5; // 輪廓線寬度
 export const COLOR_SQUARE = 0xffe869; // 黃色方塊
 export const COLOR_TRIANGLE = 0xfc7677; // 紅色三角
 export const COLOR_PENTAGON = 0x768dfc; // 藍色五邊形
+
+// ==========================================
+// 9. M5 體驗與 AI 調優常數
+// ==========================================
+
+/** 坦克重生無敵保護時間（秒與 ticks） */
+export const SPAWN_INVULNERABLE_SECONDS = 3;
+export const SPAWN_INVULNERABLE_TICKS =
+  SPAWN_INVULNERABLE_SECONDS * SIM_TICK_RATE; // 75 ticks
+
+/** 坦克肉搏碰撞接觸傷害冷卻（ticks）與法向彈射衝量 */
+export const TANK_BODY_CONTACT_COOLDOWN_TICKS = 8; // 0.32 秒接觸傷害間隔
+export const TANK_COLLISION_SEPARATION_IMPULSE = 3.5; // 相撞法向彈開衝量 (世界單位/tick)
+
+/** AI 擬人化砲管旋轉每 tick 最大角速度（弧度/tick） */
+export const AI_MAX_TURN_RATE_PER_TICK = 0.2; // 約 11.5 度/tick = 286 度/秒

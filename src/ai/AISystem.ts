@@ -50,10 +50,10 @@ export class AISystem {
         bot.aiStrafeDirection = bot.aiStrafeDirection === 1 ? -1 : 1;
       }
 
-      // 2. 戰術狀態機推進 (含滯後緩衝防抖)
+      // 2. 戰術狀態機推進 (含滯後緩衝防抖與實力懸殊智慧評估)
       this.evaluateState(bot, allTanks);
 
-      // 3. 依狀態計算移動方向與瞄準座標
+      // 3. 依狀態計算移動意圖向量與瞄準目標
       switch (bot.aiState) {
         case 'retreating':
           this.executeRetreat(bot, allTanks);
@@ -69,13 +69,13 @@ export class AISystem {
       // 4. 世界地圖邊界排斥力場（防止 AI 卡在 4000x4000 邊緣）
       this.applyBoundaryAvoidance(bot);
 
-      // 5. 正規化移動速度向量，長度不超過 1.0
+      // 5. 正規化意圖移動速度向量，長度不超過 1.0
       this.normalizeMovement(bot);
     }
   }
 
   /**
-   * 評估與切換 AI 戰術狀態（帶有滯後區間與冷卻，避免決策抽搐）
+   * 評估與切換 AI 戰術狀態（帶有滯後區間、實力懸殊避戰與冷卻）
    */
   private evaluateState(bot: Tank, allTanks: Tank[]): void {
     const hpRatio = bot.hp / bot.maxHp;
@@ -106,7 +106,18 @@ export class AISystem {
     // C. 索敵對決判斷：感知半徑內是否有敵對目標
     const threat = this.findNearestEnemyTank(bot, allTanks, PERCEPTION_RADIUS);
     if (threat) {
-      if (bot.aiState !== 'engaging') {
+      // 實力懸殊避戰：若敵方高出自己 12 級以上且自身未滿 Lv 15，避免送死衝鋒
+      const levelGap = threat.level - bot.level;
+      if (levelGap >= 12 && bot.level < 15) {
+        const d = this.dist(bot, threat);
+        if (d < 380 || hpRatio < 0.8) {
+          bot.aiState = 'retreating';
+          bot.aiStateTimer = 0;
+          bot.aiTargetId = threat.id;
+          return;
+        }
+        // 否則維持 farming 狀態繞行發育，不主動切換為 engaging
+      } else if (bot.aiState !== 'engaging') {
         bot.aiState = 'engaging';
         bot.aiStateTimer = 0;
         bot.aiTargetId = threat.id;
@@ -125,11 +136,34 @@ export class AISystem {
   }
 
   /**
-   * 執行 FARMING 狀態（打怪發育與遊蕩）
+   * 執行 FARMING 狀態（打怪發育與遊蕩，含目標記憶鎖定防抽搐）
    */
   private executeFarming(bot: Tank, shapes: Shape[]): void {
-    // 優先查詢 600 距離內最近且活動的幾何形狀
-    const shape = this.findNearestShape(bot, shapes, 600);
+    let shape: Shape | null = null;
+
+    // 優先沿用當前鎖定之形狀 (45 ticks 記憶鎖定，避免高頻抽搐切換)
+    if (bot.aiTargetShapeId >= 0) {
+      const existing = this.findShapeById(bot.aiTargetShapeId, shapes);
+      if (
+        existing?.active &&
+        this.distToShape(bot, existing) <= 750 &&
+        bot.aiTargetStickinessTimer < 45
+      ) {
+        shape = existing;
+        bot.aiTargetStickinessTimer++;
+      }
+    }
+
+    if (!shape) {
+      shape = this.findNearestShape(bot, shapes, 600);
+      if (shape) {
+        bot.aiTargetShapeId = shape.id;
+        bot.aiTargetStickinessTimer = 0;
+      } else {
+        bot.aiTargetShapeId = -1;
+        bot.aiTargetStickinessTimer = 0;
+      }
+    }
 
     if (shape) {
       const dx = shape.x - bot.x;
@@ -189,7 +223,6 @@ export class AISystem {
     const ny = dy / distToTarget;
 
     // 1. 提前量預測瞄準 (Lead Aiming)
-    // t_hit = dist / bulletSpeed
     const bSpeed = Math.max(bot.bulletSpeed, 10);
     const tHit = distToTarget / bSpeed;
     bot.input.aimX = target.x + target.vx * tHit;
@@ -199,7 +232,6 @@ export class AISystem {
     // 2. 戰術拉打走位 (基於職業最佳距離的推進/後退 + 側向環繞 Strafe)
     const optimalDist = getOptimalCombatDistance(bot.definition.id);
     const strafeDir = bot.aiStrafeDirection;
-    // 側向垂直向量：(-ny * strafeDir, nx * strafeDir)
     const perpX = -ny * strafeDir;
     const perpY = nx * strafeDir;
 
@@ -298,6 +330,7 @@ export class AISystem {
    */
   private applyBoundaryAvoidance(bot: Tank): void {
     const buf = BORDER_BUFFER;
+
     if (bot.x < buf) {
       bot.input.moveX += (buf - bot.x) / buf;
     } else if (bot.x > MAP_SIZE - buf) {
@@ -312,7 +345,7 @@ export class AISystem {
   }
 
   /**
-   * 正規化移動指令大小至 1.0 上限
+   * 正規化意圖移動指令大小至 1.0 上限
    */
   private normalizeMovement(bot: Tank): void {
     const mx = bot.input.moveX;
@@ -379,6 +412,17 @@ export class AISystem {
     return bestShape;
   }
 
+  private findShapeById(id: number, shapes: Shape[]): Shape | null {
+    if (id < 0) return null;
+    const len = shapes.length;
+    for (let i = 0; i < len; i++) {
+      if (shapes[i].id === id && shapes[i].active) {
+        return shapes[i];
+      }
+    }
+    return null;
+  }
+
   private findTankById(id: number, allTanks: Tank[]): Tank | null {
     if (id < 0) return null;
     const len = allTanks.length;
@@ -393,6 +437,12 @@ export class AISystem {
   private dist(t1: Tank, t2: Tank): number {
     const dx = t1.x - t2.x;
     const dy = t1.y - t2.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  private distToShape(t: Tank, s: Shape): number {
+    const dx = t.x - s.x;
+    const dy = t.y - s.y;
     return Math.sqrt(dx * dx + dy * dy);
   }
 }

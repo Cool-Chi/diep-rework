@@ -3,7 +3,6 @@ import {
   BASE_BULLET_RADIUS,
   BULLET_POOL_CAPACITY,
   COLOR_STROKE,
-  COLOR_TANK_BLUE,
   STROKE_WIDTH,
 } from '../config/constants';
 import type { VisibleBounds } from '../core/Camera';
@@ -26,10 +25,10 @@ export class BulletRenderer {
    * 初始化子彈貼圖與預配置 Sprite 物件池
    */
   public init(renderer: Renderer): void {
-    // 1. 繪製並生成共用子彈貼圖
+    // 1. 繪製並生成共用子彈貼圖（白底 + 深色邊框，透過 sprite.tint 支援全光譜動態染色）
     const g = new Graphics();
     g.circle(0, 0, BASE_BULLET_RADIUS);
-    g.fill({ color: COLOR_TANK_BLUE });
+    g.fill({ color: 0xffffff });
     g.stroke({ width: STROKE_WIDTH, color: COLOR_STROKE });
     this.bulletTexture = renderer.app.renderer.generateTexture({ target: g });
     g.destroy();
@@ -76,6 +75,9 @@ export class BulletRenderer {
       sprite.visible = true;
       sprite.x = rx;
       sprite.y = ry;
+      if (sprite.tint !== bullet.color) {
+        sprite.tint = bullet.color;
+      }
       visibleCounter++;
     }
 

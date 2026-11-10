@@ -2,6 +2,7 @@ import {
   BASE_BULLET_SPEED,
   BASE_TANK_RADIUS,
   COLOR_TANK_BLUE,
+  SPAWN_INVULNERABLE_TICKS,
 } from '../config/constants';
 import {
   BASIC_TANK_DEFINITION,
@@ -30,11 +31,18 @@ export class Tank {
   public color: number = COLOR_TANK_BLUE;
   public isAi = false;
 
+  // 重生無敵保護與肉搏冷卻狀態
+  public invulnerableTicks = 0; // 重生無敵剩餘 ticks (75 ticks = 3 秒)
+  public lastBodyContactTick = 0; // 上次承受肉搏撞擊之 tick (用於防秒殺冷卻)
+
   // AI 戰術狀態機 (包含滯後防抖計時器)
   public aiState: 'farming' | 'engaging' | 'retreating' = 'farming';
   public aiStateTimer = 0; // 當前狀態已維持的 ticks
   public aiTargetId = -1; // 當前鎖定目標 ID
   public aiStrafeDirection = 1; // 側向環繞方向 (1 或 -1)
+  public aiTargetShapeId = -1; // 當前鎖定之形狀 ID (農怪防抖)
+  public aiTargetStickinessTimer = 0; // 當前形狀已鎖定 ticks
+  public aiCurrentAimAngle = 0; // AI 當前虛擬砲管朝向弧度 (用於擬人化平滑旋轉)
 
   // 扁平世界座標（唯一真值，以 25 單位/格為基準）
   public x: number;
@@ -132,6 +140,8 @@ export class Tank {
     this.vy = 0;
     this.hp = this.maxHp;
     this.active = true;
+    this.invulnerableTicks = SPAWN_INVULNERABLE_TICKS;
+    this.lastBodyContactTick = 0;
     this.resetBarrelCooldowns();
   }
 

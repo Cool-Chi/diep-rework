@@ -318,8 +318,7 @@ describe('Combat and Collision System (M2)', () => {
     expect(tankB.hp).toBe(50 - 30); // 20
     expect(killedVictim).toBe(-1);
 
-    // 第二次撞擊 (tankB HP=20 受到 30 傷害陣亡)
-    // 將兩坦克放回重疊位置
+    // 接觸傷害冷卻測試：Tick 2 再次重疊時，因冷卻尚未結束，不造成第二次傷害
     tankA.x = 500;
     tankB.x = 530;
     collisionSystem.update(
@@ -329,6 +328,20 @@ describe('Combat and Collision System (M2)', () => {
       shapeSystem,
       eventBus,
       2,
+    );
+    expect(tankA.hp).toBe(25);
+    expect(tankB.hp).toBe(20);
+
+    // 第二次撞擊 (Tick 10：冷卻已過，tankB HP=20 受到 30 傷害陣亡)
+    tankA.x = 500;
+    tankB.x = 530;
+    collisionSystem.update(
+      [tankA, tankB],
+      bulletPool,
+      shapeSystem.shapes,
+      shapeSystem,
+      eventBus,
+      10,
     );
 
     expect(tankB.hp).toBeLessThanOrEqual(0);

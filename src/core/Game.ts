@@ -309,6 +309,8 @@ export class Game {
       alpha,
       visibleBounds,
       this.showAiDevLabels,
+      this.camera.isGodView,
+      this.camera.scale,
     );
     this.shapeRenderer.update(this.shapeSystem.shapes, alpha, visibleBounds);
     this.bulletRenderer.update(this.bulletPool, alpha, visibleBounds);

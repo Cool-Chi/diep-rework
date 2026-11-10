@@ -1,6 +1,8 @@
 import {
   BULLET_KNOCKBACK_FACTOR,
   COLLISION_PUSH_FACTOR,
+  TANK_BODY_CONTACT_COOLDOWN_TICKS,
+  TANK_COLLISION_SEPARATION_IMPULSE,
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config/constants';
@@ -152,8 +154,12 @@ export class CollisionSystem {
             }
           }
 
-          // 同源子彈免疫
-          if (!targetTank?.active || targetTank.id === bullet.ownerId) {
+          // 同源子彈免疫與重生無敵保護
+          if (
+            !targetTank?.active ||
+            targetTank.id === bullet.ownerId ||
+            targetTank.invulnerableTicks > 0
+          ) {
             continue;
           }
 
@@ -253,25 +259,27 @@ export class CollisionSystem {
             shape.vy += (j / mShape) * ny;
           }
 
-          // 雙向撞擊傷害
-          const damageToShape = tank.bodyDamage * shape.damageTakenMultiplier;
-          const damageToTank = shape.bodyDamage;
+          // 雙向撞擊傷害（非無敵狀態下結算）
+          if (tank.invulnerableTicks <= 0) {
+            const damageToShape = tank.bodyDamage * shape.damageTakenMultiplier;
+            const damageToTank = shape.bodyDamage;
 
-          shape.hp -= damageToShape;
-          tank.hp -= damageToTank;
-          tank.lastDamageTick = currentTick;
+            shape.hp -= damageToShape;
+            tank.hp -= damageToTank;
+            tank.lastDamageTick = currentTick;
 
-          if (shape.hp <= 0) {
-            shape.active = false;
-            shapeSystem.activeCount--;
-            eventBus.emitShapeDestroyed(shape.kind, tank.id);
-          }
+            if (shape.hp <= 0) {
+              shape.active = false;
+              shapeSystem.activeCount--;
+              eventBus.emitShapeDestroyed(shape.kind, tank.id);
+            }
 
-          if (tank.hp <= 0) {
-            tank.active = false;
-            eventBus.emitTankDied(tank.id, -1);
-            if (!tank.isAi) {
-              tank.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
+            if (tank.hp <= 0) {
+              tank.active = false;
+              eventBus.emitTankDied(tank.id, -1);
+              if (!tank.isAi) {
+                tank.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
+              }
             }
           }
         }
@@ -333,7 +341,7 @@ export class CollisionSystem {
           tankB.x += nx * overlap * (mA * invTotal) * this.pushFactor;
           tankB.y += ny * overlap * (mA * invTotal) * this.pushFactor;
 
-          // 彈性碰撞衝量 (restitution = 0.4)
+          // 彈性碰撞衝量 (restitution = 0.4) 與相撞法向彈開衝量
           const rvx = tankB.vx - tankA.vx;
           const rvy = tankB.vy - tankA.vy;
           const velAlongNormal = rvx * nx + rvy * ny;
@@ -346,28 +354,51 @@ export class CollisionSystem {
             tankB.vy += (j / mB) * ny;
           }
 
-          // 雙向撞擊傷害（以 bodyDamageToTank 計算）
-          const damageToA = tankB.bodyDamageToTank;
-          const damageToB = tankA.bodyDamageToTank;
+          // 額外賦予乾淨俐落的相向彈開衝量，避免兩車粘滯重疊
+          const sepSpeed = TANK_COLLISION_SEPARATION_IMPULSE;
+          tankA.vx -= nx * sepSpeed * (mB * invTotal);
+          tankA.vy -= ny * sepSpeed * (mB * invTotal);
+          tankB.vx += nx * sepSpeed * (mA * invTotal);
+          tankB.vy += ny * sepSpeed * (mA * invTotal);
 
-          tankA.hp -= damageToA;
-          tankB.hp -= damageToB;
-          tankA.lastDamageTick = currentTick;
-          tankB.lastDamageTick = currentTick;
+          // 雙向撞擊傷害（非無敵且冷卻達標時結算，防止 0.08 秒瞬間融化）
+          if (tankA.invulnerableTicks <= 0 && tankB.invulnerableTicks <= 0) {
+            const cooldownPassedA =
+              tankA.lastBodyContactTick === 0 ||
+              currentTick - tankA.lastBodyContactTick >=
+                TANK_BODY_CONTACT_COOLDOWN_TICKS;
+            const cooldownPassedB =
+              tankB.lastBodyContactTick === 0 ||
+              currentTick - tankB.lastBodyContactTick >=
+                TANK_BODY_CONTACT_COOLDOWN_TICKS;
 
-          if (tankA.hp <= 0) {
-            tankA.active = false;
-            eventBus.emitTankDied(tankA.id, tankB.id);
-            if (!tankA.isAi) {
-              tankA.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
-            }
-          }
+            if (cooldownPassedA || cooldownPassedB) {
+              tankA.lastBodyContactTick = currentTick;
+              tankB.lastBodyContactTick = currentTick;
+              tankA.lastDamageTick = currentTick;
+              tankB.lastDamageTick = currentTick;
 
-          if (tankB.hp <= 0) {
-            tankB.active = false;
-            eventBus.emitTankDied(tankB.id, tankA.id);
-            if (!tankB.isAi) {
-              tankB.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
+              const damageToA = tankB.bodyDamageToTank;
+              const damageToB = tankA.bodyDamageToTank;
+
+              tankA.hp -= damageToA;
+              tankB.hp -= damageToB;
+
+              if (tankA.hp <= 0) {
+                tankA.active = false;
+                eventBus.emitTankDied(tankA.id, tankB.id);
+                if (!tankA.isAi) {
+                  tankA.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
+                }
+              }
+
+              if (tankB.hp <= 0) {
+                tankB.active = false;
+                eventBus.emitTankDied(tankB.id, tankA.id);
+                if (!tankB.isAi) {
+                  tankB.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
+                }
+              }
             }
           }
         }

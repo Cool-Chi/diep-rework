@@ -49,7 +49,7 @@ export class MultiTankRenderer {
       fontFamily: 'Ubuntu, "Lucida Console", monospace, sans-serif',
       fontSize: 10,
       fontWeight: 'bold',
-      fill: 0x00ffcc,
+      fill: 0xffffff,
       stroke: { color: 0x000000, width: 2 },
       align: 'center',
     });
@@ -92,6 +92,8 @@ export class MultiTankRenderer {
     alpha: number,
     visibleBounds: VisibleBounds,
     showDevLabels = false,
+    isGodView = false,
+    cameraScale = 1.0,
   ): void {
     let poolIdx = 0;
     const count = tanks.length;
@@ -134,23 +136,55 @@ export class MultiTankRenderer {
         item.nameText.text = tank.name;
       }
 
-      // 4. 計算砲管世界朝向角度
-      const aimDx = tank.input.aimX - rx;
-      const aimDy = tank.input.aimY - ry;
-      const aimAngle = Math.atan2(aimDy, aimDx);
+      // 4. 計算砲管世界朝向角度（AI 使用平滑旋轉後的 tank.rotation，玩家即時跟隨滑鼠）
+      let aimAngle: number;
+      if (tank.isAi) {
+        aimAngle = tank.rotation;
+      } else {
+        const aimDx = tank.input.aimX - rx;
+        const aimDy = tank.input.aimY - ry;
+        aimAngle = Math.atan2(aimDy, aimDx);
+      }
 
       // 5. 更新坦克底盤與砲管
       item.tankRenderer.update(rx, ry, aimAngle, scale);
 
-      // 6. 更新頭頂暱稱位置（置於本體上方，血條下方）
-      const textY = ry - visualRadius - 8;
+      // 重生無敵呼吸呼吸閃爍護盾
+      if (tank.invulnerableTicks > 0) {
+        item.container.alpha = 0.55 + 0.35 * Math.sin(Date.now() * 0.015);
+      } else {
+        item.container.alpha = 1.0;
+      }
+
+      // 6. 計算標籤縮放 (在上帝視角下逆向放大，保證俯瞰時清晰可辨)
+      const labelScale = isGodView
+        ? Math.min(3.2, Math.max(1.0, 0.85 / Math.max(cameraScale, 0.05)))
+        : 1.0;
+      item.nameText.scale.set(labelScale);
+      item.stateText.scale.set(labelScale);
+
+      // 更新頭頂暱稱位置（置於本體上方，血條下方）
+      const textY = ry - visualRadius - 8 * labelScale;
       item.nameText.position.set(rx, textY);
       item.nameText.visible = true;
 
-      // 7. 除錯狀態標籤 (FARM / COMBAT / RETREAT)
-      if (showDevLabels && tank.isAi) {
-        item.stateText.text = `[${tank.aiState.toUpperCase()}]`;
-        item.stateText.position.set(rx, textY - 14);
+      // 7. 戰術狀態標籤 (FARM / COMBAT / RETREAT)
+      if ((showDevLabels || isGodView) && tank.isAi) {
+        if (isGodView) {
+          item.stateText.text = `[Lv${tank.level} ${tank.definition.id}] [${tank.aiState.toUpperCase()}]`;
+        } else {
+          item.stateText.text = `[${tank.aiState.toUpperCase()}]`;
+        }
+
+        let stateColor = 0x00ff88;
+        if (tank.aiState === 'engaging') {
+          stateColor = 0xff4444;
+        } else if (tank.aiState === 'retreating') {
+          stateColor = 0xffcc00;
+        }
+        item.stateText.tint = stateColor;
+
+        item.stateText.position.set(rx, textY - 14 * labelScale);
         item.stateText.visible = true;
       } else {
         item.stateText.visible = false;

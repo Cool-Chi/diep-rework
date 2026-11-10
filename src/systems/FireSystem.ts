@@ -1,4 +1,5 @@
 import {
+  AI_MAX_TURN_RATE_PER_TICK,
   BASE_BULLET_RADIUS,
   BASE_BULLET_SPEED,
   BASE_RECOIL_IMPULSE,
@@ -28,11 +29,24 @@ export class FireSystem {
   public updateTankFiring(tank: Tank, bulletPool: ObjectPool<Bullet>): void {
     if (!tank.active) return;
 
-    // 1. 更新瞄準朝向
+    // 1. 更新瞄準朝向（AI 坦克套用擬人化平滑角速度限制，杜絕機械式瞬間甩頭）
     const aimDx = tank.input.aimX - tank.x;
     const aimDy = tank.input.aimY - tank.y;
     if (aimDx * aimDx + aimDy * aimDy > 0.001) {
-      tank.rotation = Math.atan2(aimDy, aimDx);
+      const targetAngle = Math.atan2(aimDy, aimDx);
+      if (tank.isAi) {
+        let delta = targetAngle - tank.rotation;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+
+        const maxTurn = AI_MAX_TURN_RATE_PER_TICK;
+        const step = Math.sign(delta) * Math.min(Math.abs(delta), maxTurn);
+        tank.rotation += step;
+        while (tank.rotation > Math.PI) tank.rotation -= Math.PI * 2;
+        while (tank.rotation < -Math.PI) tank.rotation += Math.PI * 2;
+      } else {
+        tank.rotation = targetAngle;
+      }
     }
 
     const barrels = tank.definition.barrels;
@@ -47,6 +61,22 @@ export class FireSystem {
 
     // 3. 若有射擊意圖，依序檢查各砲管冷卻並發射
     if (tank.input.shooting) {
+      if (tank.invulnerableTicks > 0) {
+        tank.invulnerableTicks = 0;
+      }
+
+      // AI 射擊門檻：若砲管正處於大幅度轉向（夾角大於約 35 度）且非逃逸加速，暫緩開火
+      if (tank.isAi && tank.aiState !== 'retreating') {
+        const aimDx = tank.input.aimX - tank.x;
+        const aimDy = tank.input.aimY - tank.y;
+        const targetAngle = Math.atan2(aimDy, aimDx);
+        let delta = targetAngle - tank.rotation;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        if (Math.abs(delta) > 0.6) {
+          return;
+        }
+      }
       const reloadTicks = tank.reloadTicks;
       const s = sizeFactor(tank.level);
 
@@ -105,6 +135,7 @@ export class FireSystem {
               hp,
               damage,
               BULLET_LIFESPAN_TICKS,
+              tank.color,
             );
 
             // 施加反方向後座力衝量

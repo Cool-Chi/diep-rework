@@ -1,4 +1,8 @@
-import { BASE_BULLET_RADIUS, BULLET_LIFESPAN_TICKS } from '../config/constants';
+import {
+  BASE_BULLET_RADIUS,
+  BULLET_LIFESPAN_TICKS,
+  COLOR_TANK_BLUE,
+} from '../config/constants';
 
 /**
  * 子彈實體（扁平欄位，物件池化管理）
@@ -7,6 +11,7 @@ export class Bullet {
   public id = 0;
   public ownerId = 0;
   public active = false;
+  public color: number = COLOR_TANK_BLUE;
 
   public x = 0;
   public y = 0;
@@ -35,10 +40,12 @@ export class Bullet {
     hp: number,
     damage: number,
     lifespanTicks = BULLET_LIFESPAN_TICKS,
+    color = COLOR_TANK_BLUE,
   ): void {
     this.id = id;
     this.ownerId = ownerId;
     this.active = true;
+    this.color = color;
     this.x = x;
     this.y = y;
     this.prevX = x;
