@@ -1,21 +1,91 @@
 # AGENTS.md - 開發智能體與工程協作規範 (diep-rework)
 
-> 本文件是所有參與 `diep-rework` 開發的 AI 智能體（Agent）與開發者必須嚴格遵守的架構規範、程式碼標準、執行紀律與 M1~M6 實戰避坑紅線。
+> **專案階段**：**M1 ~ M6 核心里程碑全數完工**（進入後續擴充、數值調校與維護階段）。
+> 本文件是所有參與 `diep-rework` 開發的 AI 智能體（Agent）與開發者必須嚴格遵守的架構規範、程式碼標準、模組索引與實戰避坑紅線。
 
 ---
 
-## 1. 核心原則 (Golden Rules)
+## 1. 核心目錄與檔案架構索引 (Architecture Map)
 
-1. **里程碑紀律 (Milestone Discipline)**：
-   - 嚴格按照 [PLAN.md](./PLAN.md) 定義的里程碑順序（**M1 → M2 → M3a → M3b → M4a → M4b → M5 → M6**）逐步推進。
-   - **禁止提前跳步**實作後續階段功能（例如在 M1 物理底座尚未驗收前就開始寫轉職或 AI）。
-   - **收尾執行 `/verify-milestone`**：每個里程碑結尾必須執行 `/verify-milestone <編號>`（見 [.agent/skills/verify-milestone/SKILL.md](./.agent/skills/verify-milestone/SKILL.md)），依其步驟進行完整自動檢查、熱路徑掃描、browsermcp 瀏覽器操作與視覺驗收、驗收清單核對與 commit 規範檢查，並依其報告格式回報。回報後**立即停止等待使用者確認**，未獲指示前不得自行進入下一個里程碑。原本散落在各節的收尾回報要求一律以此流程為準，不重複規定。
+本專案採用純前端、All-in-Canvas、模組化 ECS-lite 架構，所有 `src/` 下的核心檔案路徑與單行職責如下：
+
+### 核心驅動與時間循環 (`src/core/`)
+- [`src/core/Game.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/Game.ts)：遊戲主中樞，組裝系統、管理主循環推進順序、輸入分發與每幀渲染管線。
+- [`src/core/GameLoop.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/GameLoop.ts)：`requestAnimationFrame` 迴圈封裝，計算真實幀間隔 $\Delta t$ 並傳遞給步進器。
+- [`src/core/FixedStepper.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/FixedStepper.ts)：固定步長模擬器（`SIM_TICK_RATE = 25` TPS），累積時間並輸出整數 ticks 與插值係數 `alpha`。
+- [`src/core/Camera.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/Camera.ts)：世界相機，處理目標插值平移、動態 FOV 縮放、視窗變換矩陣與視錐範圍計算。
+- [`src/core/InputManager.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/InputManager.ts)：玩家鍵鼠監聽（`KeyboardEvent.code`），封裝防卡鍵機制並輸出標準 `InputCommand`。
+- [`src/core/EventBus.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/EventBus.ts)：全域扁平事件匯流排，解耦物理、戰鬥、AI 與 HUD，支援零 GC 傳參。
+- [`src/core/ObjectPool.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/ObjectPool.ts)：通用高效物件池，以 $O(1)$ 進行 `acquire()` 與 `release()`，杜絕熱路徑 GC。
+- [`src/core/deriveStats.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/deriveStats.ts)：依據坦克等級與 8 項屬性加點計算實時戰鬥數值（血量、速度、裝填、傷害等）。
+
+### 物理與空間分割 (`src/physics/`)
+- [`src/physics/PhysicsWorld.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/physics/PhysicsWorld.ts)：自研 2D 圓形物理世界（加速度、每 tick 阻尼減速、速度積分、世界邊界夾取與彈性）。
+- [`src/physics/SpatialHash.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/physics/SpatialHash.ts)：基於扁平 `Int32Array`（網格 head 與實體 next）的高效空間雜湊，提供 $O(1)$ 碰撞候選查詢。
+
+### 遊戲邏輯系統處理器 (`src/systems/`)
+- [`src/systems/CollisionSystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/systems/CollisionSystem.ts)：窄相位圓形碰撞、高速子彈掃掠防穿透（Swept CCD）、撞擊推開衝量與每 tick 扣血結算。
+- [`src/systems/FireSystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/systems/FireSystem.ts)：砲管冷卻計時、多砲管交替/同步開火、後座力衝量注入、口徑半徑對齊與子彈生成。
+- [`src/systems/LevelingSystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/systems/LevelingSystem.ts)：經驗分數結算、等級提升、升級點數發放、轉職條件檢測與跨級連升觸發。
+- [`src/systems/RegenSystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/systems/RegenSystem.ts)：坦克生命自然恢復與 30 秒無傷觸發的 Hyper-Regen 急速回血處理。
+- [`src/systems/ShapeSystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/systems/ShapeSystem.ts)：維護 500+ 幾何形狀（方塊、三角、五邊形）的分區生成、慢速漫遊漂移與定額補位。
+- [`src/systems/SpawnSystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/systems/SpawnSystem.ts)：管理玩家與 AI 重生機制（折半等級重生、最大最小距離全圖分散選點、無敵護盾）。
+
+### 人工智慧決策機器人 (`src/ai/`)
+- [`src/ai/AISystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ai/AISystem.ts)：AI 核心決策有限狀態機（打怪、戰鬥、撤退、遊蕩），包含雙門檻遲滯、角速度轉向平滑與邊退邊打。
+- [`src/ai/aiTactics.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ai/aiTactics.ts)：各職業專屬戰術配置（狙擊風箏距離、衝鋒壓制、預判引導射擊權重）。
+- [`src/ai/botNames.config.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ai/botNames.config.ts)：原汁原味 diep.io 風格的 100+ 機器人名冊。
+
+### 扁平數據模型 (`src/entities/`)
+- [`src/entities/Tank.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/entities/Tank.ts)：坦克扁平數據模型（座標、速度、插值前座標、角度、生命、等級、職業定義、輸入指令）。
+- [`src/entities/Bullet.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/entities/Bullet.ts)：子彈實體（位置、速度、傷害、耐久血量、半徑、壽命 ticks、顏色、平滑漸逝進度）。
+- [`src/entities/Shape.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/entities/Shape.ts)：幾何形狀實體（多邊形種類、生命值、碰撞傷害、質量、旋轉角與經驗值）。
+- [`src/entities/Particle.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/entities/Particle.ts)：粒子實體（爆破飛濺殘片、顏色、縮放衰減與壽命倒數）。
+
+### 繪製與表現層 (`src/rendering/`)
+- [`src/rendering/Renderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/Renderer.ts)：Pixi.js v8 Application 初始化，管理 `WorldContainer` 與 `HUDContainer` 視窗縮放。
+- [`src/rendering/TankRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/TankRenderer.ts)：單體坦克視覺繪製（圓形底座、單管/多管幾何、外擴喇叭口、砲管射擊後座力縮放）。
+- [`src/rendering/MultiTankRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/MultiTankRenderer.ts)：多坦克管理池渲染器，支援玩家與所有 AI 坦克平滑轉向插值（`lerpAngle`）與名稱顯示。
+- [`src/rendering/BulletRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/BulletRenderer.ts)：雙規格超取樣共用貼圖（Normal / Destroyer）Sprite 池，確保任何半徑下邊框恆定 3.0px 且零模糊。
+- [`src/rendering/ShapeRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/ShapeRenderer.ts)：幾何多邊形預烘培共用貼圖 Sprite 池渲染器，支援自轉動畫與邊界剔除。
+- [`src/rendering/ParticleRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/ParticleRenderer.ts)：爆炸粒子 Sprite 池渲染器。
+- [`src/rendering/HealthBarRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/HealthBarRenderer.ts)：世界層動態血條，掛載於 `WorldContainer` 並與實體共用插值座標，杜絕抖動。
+- [`src/rendering/GridRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/GridRenderer.ts)：背景網格貼圖層與地圖邊界深灰色陰影表現。
+- [`src/rendering/culling.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/culling.ts)：手動視錐剔除純函式 `isInBounds`，安全取代 Pixi 內建 Culler。
+- [`src/rendering/getRenderPosition.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/getRenderPosition.ts)：零配置插值座標計算器 `(prev + (cur - prev) * alpha)`。
+
+### 使用者介面 (`src/ui/`)
+- [`src/ui/HUD.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ui/HUD.ts)：整合管理所有掛載於 `HUDContainer` 的 Canvas 內嵌 UI 元件與響應式重排。
+- [`src/ui/StatUpgradePanel.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ui/StatUpgradePanel.ts)：左下角 8 項屬性升級面板（進度條、快捷鍵標籤 `[1]~[8]`、點擊升級按鈕）。
+- [`src/ui/ScoreBar.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ui/ScoreBar.ts)：底部中央等級、目前分數與平滑動畫經驗進度條。
+- [`src/ui/MiniMap.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ui/MiniMap.ts)：右下角世界雷達小地圖，標示 4000x4000 邊界與玩家/AI 即時點位。
+- [`src/ui/Leaderboard.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ui/Leaderboard.ts)：右上角前 10 名即時排行榜（分數遞減排序、高光標記玩家）。
+- [`src/ui/EvolutionPanel.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ui/EvolutionPanel.ts)：左上角轉職卡牌 Deck（動態自轉 3D 預覽卡牌、`Ignore` 灰色長方按鈕與靠近展開）。
+- [`src/ui/GameOverModal.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ui/GameOverModal.ts)：死亡結算彈窗（擊殺者、得分、存活時間、擊殺數、一鍵重生按鈕與 Enter 鍵綁定）。
+- [`src/ui/KillToast.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ui/KillToast.ts)：擊殺敵方坦克時的漂浮擊殺通知。
+
+### 遊戲數值設定 (`src/config/`)
+- [`src/config/constants.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/config/constants.ts)：時鐘真值（`SIM_TICK_RATE = 25`）、物理參數、渲染尺度與 `TODO(tune)` 可調常數。
+- [`src/config/levels.config.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/config/levels.config.ts)：原版 Lv 1 ~ Lv 30 經驗升級查表與技能點數發放邏輯。
+- [`src/config/stats.config.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/config/stats.config.ts)：原版 8 項屬性加點非線性換算公式與等級尺寸成長係數。
+- [`src/config/tanks.config.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/config/tanks.config.ts)：9 款坦克職業定義、轉職拓撲樹、砲管配置、射速、散射與後座力。
+
+### 除錯與沙盒工具 (`src/debug/`)
+- [`src/debug/DebugOverlay.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/debug/DebugOverlay.ts)：僅在 `DEV` 載入的除錯面板（按 `` ` `` 鍵切換），支援即時性能監控、一鍵加分/升級/轉職、上帝視角、無敵模式、生成 AI 與 600 子彈壓力測試。
+
+---
+
+## 2. 核心原則 (Golden Rules)
+
+1. **里程碑紀律與維護規範 (Milestone & Maintenance Discipline)**：
+   - 專案已通過 M1 ~ M6 驗收，後續新功能、擴充與維護仍須維持高標準：變更前先釐清範疇、新增對應單元測試、實機驗證。
+   - **收尾執行 `/verify-milestone`**：每次重大里程碑或版本發布結尾必須執行驗收流程，依其步驟進行完整自動檢查、熱路徑掃描、browsermcp 瀏覽器操作與視覺驗收、驗收清單核對與 commit 規範檢查，並回報給使用者。
 2. **零程式碼確認期 (Plan-First Rule)**：
    - 未獲使用者明確「確認開始實作」指令前，不得生成或修改任何專案程式碼檔案。
 3. **無伺服器與純前端 (Pure Client-Side)**：
    - 本專案為單一專案、純前端瀏覽器應用。禁止引進需要後端 Node.js 常駐服務運行的架構；所有遊戲迴圈、自研物理、AI 與 UI 均在瀏覽器前端執行。
 4. **原版數值與時鐘單一真值 (Authentic Stats & Single Clock Source)**：
-   - 所有遊戲數值與公式以原版 diep.io（`diepio.fandom.com/wiki/Stats` 等）為準。已查證數值寫入 `src/config/` 並**在註解中註明實際開啟驗證過的來源 URL 與原文**；查不到的數值必須在 `src/config/constants.ts` 設為具名常數並標註 `TODO(tune)`（註明「未查證」），透過 `DebugOverlay` 提供即時調整，**嚴禁無標記地自行編造數值或捏造不存在的 Wiki 子頁面連結**。
+   - 所有遊戲數值與公式以原版 diep.io（`diepio.fandom.com/wiki/Stats` 等）為準。已查證數值寫入 `src/config/` 並**在註解中註明實際開啟驗證過的來源 URL 與原文**；查不到的數值必須在 `src/config/constants.ts` 設為具名常數並標註 `TODO(tune)`（註明「未查證」），透過 `DebugOverlay` 提供即時調整，**嚴禁無標記地自行編造數值**。
    - 固定步長模擬頻率（25 ticks/秒）只定義在 `src/config/constants.ts` 的單一常數 `SIM_TICK_RATE = 25`，所有以 tick 為單位的數值皆由它換算，**禁止硬編碼 `0.04`**。
    - 職業階層命名統一採用原版：**Tier 1 (Lv 1)**、**Tier 2 (Lv 15)**、**Tier 3 (Lv 30)**，型別固定為 `tier: 1 | 2 | 3`，禁止出現「一階／二階／三階」混用。
 5. **世界尺度基準 (World Coordinate Scale)**：
@@ -33,7 +103,7 @@
 
 ---
 
-## 2. 程式碼規範與型別標準 (Coding & TypeScript Standards)
+## 3. 程式碼規範與型別標準 (Coding & TypeScript Standards)
 
 1. **嚴格型別與 Linter (Strict TypeScript & Biome)**：
    - `tsconfig.json` 必須開啟 `strict: true`。
@@ -53,9 +123,9 @@
 
 ---
 
-## 3. 效能與記憶體管理鐵律 (Performance & Zero-GC Rules)
+## 4. 效能與記憶體管理鐵律 (Performance & Zero-GC Rules)
 
-遊戲目標支援 **120+ FPS** 高刷顯示器（25 TPS 模擬 + 插值）與 **500+ 形狀 / 600+ 子彈高密度交火**，所有 Agent 必須遵守以下效能規範：
+遊戲支援 **120+ FPS** 高刷顯示器（25 TPS 模擬 + 插值）與 **500+ 形狀 / 600+ 子彈高密度交火**，所有 Agent 必須遵守以下效能規範：
 
 1. **熱路徑零配置與禁用語法清單 (Zero-Allocation in Hot Path)**：
    - 在 `GameLoop`、`FixedStepper`、所有 `System.update()`、物理碰撞檢測與每幀繪製中，**絕對禁止**：
@@ -70,103 +140,10 @@
 3. **Pixi.js v8 渲染最佳化與手動視錐剔除**：
    - 子彈、三種幾何形狀與粒子**必須使用預先烘培共用貼圖（Shared Texture）的預配置 `Sprite` 池**，最大化 GPU 批次繪製（Batch Rendering）。
    - **嚴禁使用 Pixi v8 內建 `Culler.shared.cull` 或設定 `sprite.cullable = true`**（會導致預配置物件池 Sprite 包圍盒快取失效、發射出的子彈完全隱形）。**一律統一使用 `Camera.getVisibleBounds()` 搭配 `src/rendering/culling.ts` 的 `isInBounds(rx, ry, radius, visibleBounds, margin)` 手動設定 `sprite.visible`**。
-4. **遠端實體 LOD 降頻原則 (Conditional LOD)**：
-   - 遠距實體降頻模擬**僅在 M2 / M6 壓力測試（600 子彈 + 500 形狀）未達幀率目標時才實作**，在未證明為效能瓶頸前不提前引入。
 
 ---
 
-## 4. Pixi.js v8 繪製與自研物理協同規則
-
-1. **畫布層次結構 (Canvas Hierarchy)**：
-   ```
-   Pixi.Application.stage
-   ├── WorldContainer (隨 Camera 縮放與插值平移)
-   │   ├── GridBackground (1 格 = 25 單位)
-   │   ├── ShapeContainer
-   │   ├── BulletContainer
-   │   ├── TankContainer (MultiTankRenderer + Player TankRenderer)
-   │   ├── HealthBarLayer (置於坦克與形狀之上，共用世界插值座標)
-   │   └── ParticleContainer
-   └── HUDContainer (固定螢幕像素座標，不受相機縮放影響)
-       ├── StatUpgradePanel
-       ├── ScoreBar
-       ├── MiniMap
-       ├── Leaderboard
-       ├── EvolutionPanel
-       ├── KillToast
-       └── GameOverModal
-   ```
-2. **Pixi v8 API 強制規範**：
-   - 初始化畫布必須使用 `await app.init({ ... })`。
-   - `Graphics` 繪圖必須先呼叫幾何方法（如 `.circle(x, y, r)`、`.rect(...)`、`.poly(...)`），再呼叫 `.fill(...)` 與 `.stroke(...)`。
-   - **嚴禁使用 Pixi v7 已廢棄的 `beginFill()` / `endFill()` / `lineStyle()` 等舊語法**。
-3. **座標與角度真值、渲染插值及固定更新順序**：
-   - 實體自身的扁平數值欄位（`entity.x`, `entity.y`, `entity.angle`）為遊戲世界的唯一真值（Single Source of Truth）。
-   - 每個模擬 tick 開始前先將當前座標與角度存入 `prevX = x; prevY = y; prevAngle = angle;`。
-   - 本體 Sprite、世界動態血條（`HealthBarRenderer`）與小地圖圓點**必須共用 `getRenderPosition(entity, alpha, out)` 取得插值座標**；角度必須透過最短弧度差 `lerpAngle(prevAngle, angle, alpha)` 插值。
-   - **每幀 `Game.render(alpha)` 固定執行順序（嚴禁調換）**：
-     ① `FixedStepper` 跑完當幀所有模擬 ticks → ② 計算玩家插值座標並更新 `Camera.update()` → ③ `Camera.applyTransform(worldContainer)` → ④ 更新所有世界層 Sprite 與 `HealthBarRenderer` → ⑤ 更新 `HUDContainer` 各面板。
-4. **碰撞過濾與每 Tick 結算規則**：
-   - **同源不互撞**：同一發射者（`ownerId` 相同）的子彈彼此不碰撞、與發射者本人亦不碰撞；MVP 無隊伍系統，其餘單位互為敵人。
-   - **每 Tick 結算（不乘 $\Delta t$）**：每個模擬 tick（25 TPS）兩圓重疊時各結算一次傷害（含子彈 vs 目標、坦克 vs 形狀、**坦克 vs 坦克本體互撞與推開**）。
-   - **防穿透**：高速子彈每 tick 位移可能大於半徑，必須採用掃掠檢測（Swept Circle-Circle）避免漏判。
-
----
-
-## 5. 測試、除錯與驗收要求
-
-1. **測試先行與原版數值 Golden Values (Unit Tests)**：
-   - 測試先行：實作或修改系統邏輯前，先撰寫或更新 `tests/` 下的 Vitest 單元測試。
-   - 數值測試必須以 [PLAN.md](./PLAN.md) 第 6 節的原版數值作為 **Golden Values**。
-   - 壓力測試（`tests/stress.test.ts`）僅輸出耗時基準數據並驗證零崩潰，**不做硬性毫秒斷言**（避免不同機器負載造成假性失敗）。
-2. **In-Game Debug 沙盒維護（僅 `DEV` 載入）**：
-   - `DebugOverlay.ts`（按 `Backquote` `` ` `` 鍵開啟）**只能在 `if (import.meta.env.DEV)` 條件下動態載入**，確保正式生產打包 Tree-shaking 完全剔除除錯面板程式碼。
-   - 每個里程碑新增功能時，必須同步擴充 `DebugOverlay` 對應的測試與調參功能。
-3. **收尾驗收回報與瀏覽器自主實機驗收**：
-   - 里程碑完成或重大功能收尾時的檢查、熱路徑掃描、驗收清單核對與回報，一律依 `/verify-milestone <編號>` 流程執行並套用其報告格式。
-   - **實機驗證強制執行**：必須透過 `browsermcp` 自行連線 Edge 瀏覽器，激活前景分頁並確認玩家處於存活且無 `GameOverModal` 遮擋狀態下，執行完整遊戲場景模擬、擷取實機快照並以 `read_file` 親自檢視圖片內容。
-
----
-
-## 6. 套件管理與終端操作命令
-
-- **本機環境**：Windows 11, PowerShell。
-- **核准套件清單（Strict Dependency Allowlist）**：
-  - **主要依賴**：`pixi.js@^8`。
-  - **開發與測試依賴**：`vite`, `typescript`, `vitest`, `@biomejs/biome`。
-  - **嚴格限制**：**上述清單以外的任何第三方套件（含 `jsdom`, `commitlint`, `husky`, `matter-js`），未經詢問並獲得使用者明確同意前，禁止自行安裝**。
-- **常用標準命令**：
-  - 開發伺服器：`npm run dev`
-  - 生產建置：`npm run build`
-  - 型別檢查：`npm run typecheck`（`tsc --noEmit`）
-  - 程式碼檢查：`npm run lint`（`biome check`）
-  - 單元測試：`npm test`
-
----
-
-## 7. Git 提交規範 (Git Commit Standards)
-
-所有提交必須嚴格遵守 **Conventional Commits 1.0** 格式：`<type>(<scope>): <description>`。
-
-1. **Commit 格式結構**：
-   - 格式：`<type>(<scope>): <description>`
-   - 可選的 body：每行不超過 72 字元，說明具體變更內容與原因。
-   - 可選的 footer：以 `Refs: M2` 或 `Refs: PLAN.md M1` 格式標註對應之里程碑。
-2. **Type 允許清單（嚴格限定以下 9 種）**：
-   - `feat`、`fix`、`refactor`、`perf`、`test`、`docs`、`build`、`chore`、`style`。
-3. **Scope 建議清單**：
-   - `core`、`physics`、`rendering`、`entities`、`systems`、`ui`、`ai`、`config`、`debug`、`tests`、`docs`（跨模組可省略）。
-4. **Description 規範**：
-   - 使用英文（English）、祈使句語氣（如 `add`, `fix`, `scaffold`, `refactor`）、小寫開頭、結尾不加句號、長度不超過 72 字元。
-5. **里程碑與執行紀律**：
-   - 每個里程碑至少有 1 個 commit；每個 commit 都必須能獨立通過 `npm run typecheck`、`npm test` 與 `npm run lint`。
-   - **禁止使用無 type 的提交訊息**（如禁止 `"M1: foundation"`）。
-   - **嚴禁私自 `git commit --amend` 或 force push 已回報給使用者的 commit**，除非使用者明確要求。
-   - 在 Windows PowerShell 提交多行 commit 訊息時，優先寫入暫存檔再以 `git commit -F <file>` 提交，避免多行字串解析錯誤。
-
----
-
-## 8. M1 ~ M6 歷次實戰踩坑與避坑紅線總表 (Post-Mortem & Anti-Regression Redlines)
+## 5. M1 ~ M6 歷次實戰踩坑與避坑紅線總表 (Post-Mortem & Anti-Regression Redlines)
 
 > 本節彙整自 M1 至 M6 開發期間所有曾被使用者糾正、退回重做、視覺破圖與物理/AI 異常之實戰教訓。Agent 在撰寫任何新功能、重構或執行驗收時，必須逐條對照避坑：
 
@@ -233,35 +210,46 @@
       - **雙門檻遲滯（Hysteresis）**：進入 `retreating` 的血量門檻（如 `< 35%`）與脫離 `retreating` 的恢復門檻（如 `>= 65%` 或脫離威脅半徑 + 最短維持 ticks）必須分離，徹底杜絕狀態乒乓震盪。
       - **撤退邊退邊打**：AI 在 `retreating` 狀態下移動方向遠離威脅，但**必須持續瞄準威脅或路徑形狀並維持 `shooting = true`**（藉後座力加速脫離並自衛），禁止在有目標時停火盲飄。
 
+### E. 數值查證、測試與終端操作紅線 (Authentic Data, Testing & Shell)
+
+13. **【紅線 13】嚴禁編造 Wiki 出處連結與移除壓力測試硬性耗時斷言**：
+    - **避坑規範**：所有數值以原版 diep.io 為準。未查證項目必須在 `src/config/constants.ts` 設為具名常數並標註 `TODO(tune)`（註明「未查證」）；`stress.test.ts` 僅驗證零崩潰與輸出基準數據，禁止設定硬性毫秒斷言。
+14. **【紅線 14】Windows PowerShell 語法與多行 Commit 提交規範**：
+    - **避坑規範**：Windows PowerShell 5.1 不支援 `&&` 指令串接符號，一律改用 `;` 或分行執行；多行 commit 訊息必須寫入暫存檔後以 `git commit -F <file>` 提交。
+
 ---
 
-# Diep.io Clone 專案架構與常駐規範 (M4 ~ M6 階段)
+## 6. 套件管理與終端操作命令
 
-## 1. 使用者意圖自動轉譯 (Intent Translation)
-- 使用者輸入之需求多為白話描述或玩法感受。收到指令時，必須自動對應至本專案的 TypeScript 模組、設定檔與測試檔，不得要求使用者提供底層程式碼細節。
+- **本機環境**：Windows 11, PowerShell。
+- **核准套件清單（Strict Dependency Allowlist）**：
+  - **主要依賴**：`pixi.js@^8`。
+  - **開發與測試依賴**：`vite`, `typescript`, `vitest`, `@biomejs/biome`。
+  - **嚴格限制**：**上述清單以外的任何第三方套件（含 `jsdom`, `commitlint`, `husky`, `matter-js`），未經詢問並獲得使用者明確同意前，禁止自行安裝**。
+- **常用標準命令**：
+  - 開發伺服器：`npm run dev`
+  - 生產建置：`npm run build`
+  - 型別檢查：`npm run typecheck`（`tsc --noEmit`）
+  - 程式碼檢查：`npm run lint`（`biome check`）
+  - 單元測試：`npm test`
 
-## 2. M1 ~ M3b 核心底座紅線 (嚴禁破壞)
-- **固定步長與插值**：模擬層嚴格維持 `FixedStepper` (`SIM_TICK_RATE = 25` TPS)，所有移動、射擊冷卻、生命回復皆以 `tick` 計算；渲染層必須維持 `prevX`/`prevY`/`prevAngle` 至 `x`/`y`/`angle` 的平滑插值，禁止將遊戲邏輯綁定在渲染幀率 (FPS) 上。
-- **零配置與記憶體管理**：在 `25 TPS` 模擬迴圈、碰撞檢測與渲染更新中，嚴禁頻繁 `new` 物件或產生陣列垃圾。必須全面複用 `ObjectPool` 與基於 TypedArray 的 `SpatialHash`。
-- **共享驅動架構 (`InputCommand`)**：無論是玩家 (`InputManager` 透過 `event.code` 觸發) 或 M5 的 `AISystem`，所有坦克實體的移動與開火必須 100% 透過寫入該實體的 `InputCommand` 驅動，共用同一套移動與射擊系統，嚴禁為 AI 寫獨立的作弊移動或開火邏輯。
-- **Pixi.js v8 規範**：遵循 Pixi v8 非同步初始化與共用貼圖 Sprite 池化設計，純 HUD 元件統一掛載於 `HUD` 容器，世界動態血條掛載於 `WorldContainer` 的 `HealthBarLayer`，視錐剔除一律採用 `isInBounds` 手動邊界判斷。
-- **代碼品質與型別安全**：嚴格遵守 Biome 規範 (`noExplicitAny`)，禁止使用 `any` 型別。
+---
 
-## 3. 里程碑推進與 DebugOverlay 同步鐵則
-- 每推進一個子里程碑或新功能：
-  1. 必須同步擴充 `DebugOverlay`（僅在 `import.meta.env.DEV` 載入，按 `Backquote` 開啟），確保新功能具備一鍵測試按鈕（如：無敵模式、上帝視角、強制切換職業、生成/清除 AI、壓力測試）。
-  2. 正式生產建置 (`npm run build`) 必須確保 Tree-shaking 完全剔除 `DebugOverlay`。
+## 7. Git 提交規範 (Git Commit Standards)
 
-## 4. 完成定義 (Definition of Done)
-- 任何代碼修改完成後，必須依序在終端機執行並通過：
-  1. `npm run typecheck`
-  2. `npm test` (Vitest 單元測試全過)
-  3. `npm run lint` (Biome 檢查無報錯)
-- **Agent 瀏覽器全流程自主實機驗收（強制）**：
-  - 凡涉及 UI (`EvolutionPanel`, `GameOverModal`, `StatUpgradePanel`)、相機視野 FOV、砲管與子彈外觀、戰鬥手感、AI 戰術與狀態機、物理碰撞等任何可玩內容變更：
-  - **必須調用 `browsermcp` 自行連接本機 Edge `localhost:3000` 分頁並以 `tab select` 切換至前景**。
-  - **必須先開啟 `isGodMode = true` 並呼叫 `hud.gameOverModal.triggerRespawn()` 確保玩家存活且無結算遮罩遮擋**。
-  - 讀取 Console 確認 **0 Runtime Error / 0 Warning**。
-  - 模擬玩家真實互動（升級、點擊轉職卡牌、開火射擊、切換上帝視角、觸發 600 子彈壓力測試）。
-  - 對動態系統進行連續多 Tick 取樣（確保 0 抽搐、0 死鎖、0 漂移、持續開火）。
-  - 調用 `screenshot` 擷取 Canvas 實圖後，**必須呼叫 `read_file` 親自檢視截圖影像**確認無 `GameOverModal` 遮擋且邊框/解析度正常，再轉存至 Artifacts 作為交付驗收之唯一具體視覺證據。
+所有提交必須嚴格遵守 **Conventional Commits 1.0** 格式：`<type>(<scope>): <description>`。
+
+1. **Commit 格式結構**：
+   - 格式：`<type>(<scope>): <description>`
+   - 可選的 body：每行不超過 72 字元，說明具體變更內容與原因。
+   - 可選的 footer：以 `Refs: M2` 或 `Refs: PLAN.md M1` 格式標註對應之里程碑。
+2. **Type 允許清單（嚴格限定以下 9 種）**：
+   - `feat`、`fix`、`refactor`、`perf`、`test`、`docs`、`build`、`chore`、`style`。
+3. **Scope 建議清單**：
+   - `core`、`physics`、`rendering`、`entities`、`systems`、`ui`、`ai`、`config`、`debug`、`tests`、`docs`（跨模組可省略）。
+4. **Description 規範**：
+   - 使用英文（English）、祈使句語氣（如 `add`, `fix`, `scaffold`, `refactor`）、小寫開頭、結尾不加句號、長度不超過 72 字元。
+5. **里程碑與執行紀律**：
+   - 每個里程碑至少有 1 個 commit；每個 commit 都必須能獨立通過 `npm run typecheck`、`npm test` 與 `npm run lint`。
+   - **禁止使用無 type 的提交訊息**（如禁止 `"M1: foundation"`）。
+   - **嚴禁私自 `git commit --amend` 或 force push 已回報給使用者的 commit**，除非使用者明確要求。

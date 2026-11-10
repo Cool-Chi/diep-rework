@@ -32,8 +32,6 @@ diff/
 # Scripts & Automation
 *.sh
 *.ps1
-/.agent/
-/.agents/
 /scripts/
 
 # Python Cache & Virtual Environments
