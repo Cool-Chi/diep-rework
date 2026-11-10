@@ -153,9 +153,9 @@ export const MACHINE_GUN_TANK_DEFINITION: TankDefinition = {
   evolutions: [], // M4b 延伸為 destroyer
   barrels: [
     {
-      length: BASE_BARREL_LENGTH,
+      length: 42, // 原版機槍長度約 42 單位
       width: BASE_BARREL_WIDTH,
-      tipWidth: 16, // 喇叭口寬度擴展至 16
+      tipWidth: 27, // 梯形外擴喇叭口（底座寬度 18 的 1.5 倍）
       offsetX: 0,
       offsetY: 0,
       angle: 0,

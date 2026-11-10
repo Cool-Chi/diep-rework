@@ -62,7 +62,8 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
   it('configures Machine Gun with trapezoidal tipWidth and spread', () => {
     expect(MACHINE_GUN_TANK_DEFINITION.barrels).toHaveLength(1);
     const b = MACHINE_GUN_TANK_DEFINITION.barrels[0];
-    expect(b.tipWidth).toBe(16);
+    expect(b.length).toBe(42);
+    expect(b.tipWidth).toBe(27);
     expect(b.spread).toBe(0.2);
     expect(b.reloadMultiplier).toBe(0.67);
   });
