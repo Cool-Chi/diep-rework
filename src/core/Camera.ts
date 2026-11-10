@@ -38,6 +38,14 @@ export class Camera {
   public smoothK: number = CAMERA_SMOOTH_K;
   public isGodView = false; // 調試專用上帝全圖鳥瞰視角開關
 
+  // 螢幕微震動系統 (Screen Shake)
+  public shakeIntensity = 0;
+  public shakeOffsetX = 0;
+  public shakeOffsetY = 0;
+
+  // 死亡觀戰目標 (Spectator Mode)
+  public spectateTarget: { x: number; y: number } | null = null;
+
   // 預先配置可複用的邊界與座標物件，避免每幀產生垃圾回收
   private readonly bounds: VisibleBounds = {
     minX: 0,
@@ -89,6 +97,23 @@ export class Camera {
     this.targetY = y;
   }
 
+  public get renderX(): number {
+    return this.x + this.shakeOffsetX;
+  }
+
+  public get renderY(): number {
+    return this.y + this.shakeOffsetY;
+  }
+
+  /**
+   * 施加螢幕微震動
+   * @param intensity 震動強度（像素/世界單位）
+   */
+  public addShake(intensity: number): void {
+    if (this.isGodView) return;
+    this.shakeIntensity = Math.min(24, this.shakeIntensity + intensity);
+  }
+
   /**
    * 設定平滑跟隨的目標座標（請傳入插值後的坦克顯示位置）
    */
@@ -98,12 +123,17 @@ export class Camera {
       this.targetY = 2000;
       return;
     }
+    if (this.spectateTarget) {
+      this.targetX = this.spectateTarget.x;
+      this.targetY = this.spectateTarget.y;
+      return;
+    }
     this.targetX = x;
     this.targetY = y;
   }
 
   /**
-   * 每渲染幀更新相機位置
+   * 每渲染幀更新相機位置與震動衰減
    * 採用與幀率無關的指數平滑公式：factor = 1 - exp(-k * dt)
    * @param dtSeconds 距離上一渲染幀的時間差（秒）
    */
@@ -113,6 +143,9 @@ export class Camera {
     if (this.isGodView) {
       this.targetX = 2000;
       this.targetY = 2000;
+    } else if (this.spectateTarget) {
+      this.targetX = this.spectateTarget.x;
+      this.targetY = this.spectateTarget.y;
     }
 
     // 與幀率無關的平滑權重：1 - exp(-k * dt)
@@ -120,6 +153,23 @@ export class Camera {
 
     this.x += (this.targetX - this.x) * factor;
     this.y += (this.targetY - this.y) * factor;
+
+    // 震動更新與指數衰減
+    if (this.shakeIntensity > 0.05) {
+      const angle = Math.random() * Math.PI * 2;
+      this.shakeOffsetX = Math.cos(angle) * this.shakeIntensity;
+      this.shakeOffsetY = Math.sin(angle) * this.shakeIntensity;
+      this.shakeIntensity *= Math.exp(-9.0 * dtSeconds);
+      if (this.shakeIntensity <= 0.05) {
+        this.shakeIntensity = 0;
+        this.shakeOffsetX = 0;
+        this.shakeOffsetY = 0;
+      }
+    } else {
+      this.shakeIntensity = 0;
+      this.shakeOffsetX = 0;
+      this.shakeOffsetY = 0;
+    }
   }
 
   /**

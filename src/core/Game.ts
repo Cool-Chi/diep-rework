@@ -1,11 +1,17 @@
 import { AISystem } from '../ai/AISystem';
 import {
   BULLET_POOL_CAPACITY,
+  SIM_TICK_RATE,
+  SPAWN_INVULNERABLE_TICKS,
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config/constants';
+import { pointsForLevel, SCORE_FOR_LEVEL } from '../config/levels.config';
+import { BASIC_TANK_DEFINITION } from '../config/tanks.config';
 import type { DebugOverlay } from '../debug/DebugOverlay';
 import { Bullet } from '../entities/Bullet';
+import { Particle } from '../entities/Particle';
+import type { ShapeType } from '../entities/Shape';
 import { Tank } from '../entities/Tank';
 import { PhysicsWorld } from '../physics/PhysicsWorld';
 import { BulletRenderer } from '../rendering/BulletRenderer';
@@ -16,6 +22,10 @@ import {
 } from '../rendering/getRenderPosition';
 import { HealthBarRenderer } from '../rendering/HealthBarRenderer';
 import { MultiTankRenderer } from '../rendering/MultiTankRenderer';
+import {
+  PARTICLE_POOL_CAPACITY,
+  ParticleRenderer,
+} from '../rendering/ParticleRenderer';
 import { Renderer } from '../rendering/Renderer';
 import { ShapeRenderer } from '../rendering/ShapeRenderer';
 import { TankRenderer } from '../rendering/TankRenderer';
@@ -27,6 +37,7 @@ import { ShapeSystem } from '../systems/ShapeSystem';
 import { SpawnSystem } from '../systems/SpawnSystem';
 import { HUD } from '../ui/HUD';
 import { Camera } from './Camera';
+import { recomputeDerivedStats } from './deriveStats';
 import { EventBus } from './EventBus';
 import { FixedStepper } from './FixedStepper';
 import { GameLoop } from './GameLoop';
@@ -74,10 +85,19 @@ export class Game {
   public readonly gridRenderer = new GridRenderer();
   public readonly shapeRenderer = new ShapeRenderer();
   public readonly bulletRenderer = new BulletRenderer();
+  public readonly particleRenderer = new ParticleRenderer();
   public readonly tankRenderer = new TankRenderer();
   public readonly multiTankRenderer = new MultiTankRenderer();
   public readonly healthBarRenderer = new HealthBarRenderer();
   public readonly hud: HUD;
+
+  public readonly particlePool = new ObjectPool<Particle>(
+    PARTICLE_POOL_CAPACITY,
+    () => new Particle(),
+  );
+
+  public playerSessionTicks = 0;
+  public playerKills = 0;
 
   public showAiDevLabels = false; // 是否在 AI 頭頂顯示戰術狀態標籤
 
@@ -86,14 +106,15 @@ export class Game {
     0, 0, 0, 0,
   ];
   private loop: GameLoop;
-  private devOverlay: DebugOverlay | null = null;
+  public devOverlay: DebugOverlay | null = null;
   private onResizeBound: () => void;
+  private onKeyDownBound: (e: KeyboardEvent) => void;
 
   constructor() {
     this.playerTank.name = 'You';
     this.allTanks.push(this.playerTank, ...this.spawnSystem.aiTanks);
 
-    this.hud = new HUD(this.eventBus);
+    this.hud = new HUD(this.eventBus, () => this.respawnPlayer());
     this.levelingSystem = new LevelingSystem(this.eventBus, this.allTanks);
     this.inputManager.eventBus = this.eventBus;
     this.inputManager.isOverUi = (x, y) => this.hud.isOverUi(x, y);
@@ -126,10 +147,70 @@ export class Game {
       }
     });
 
-    // 監聽坦克陣亡事件以觸發重生排程
-    this.eventBus.onTankDied((victimId) => {
-      this.spawnSystem.handleTankDeath(victimId, this.currentTick);
+    // 監聽子彈命中火花特效
+    this.eventBus.onBulletHit((x, y, color) => {
+      this.spawnHitSparks(x, y, color);
     });
+
+    // 監聽幾何形狀摧毀特效
+    this.eventBus.onShapeDestroyed((kind, _killerId, x, y) => {
+      this.spawnShapeExplosion(x || 2000, y || 2000, kind);
+    });
+
+    // 監聽坦克陣亡事件（死亡爆裂、觀戰鏡頭、擊殺浮動 Toast 與結算畫面）
+    this.eventBus.onTankDied((victimId, killerId, victimX, victimY) => {
+      this.spawnSystem.handleTankDeath(victimId, this.currentTick);
+
+      const victim = this.findTankById(victimId);
+      const posX = victimX || victim?.x || 2000;
+      const posY = victimY || victim?.y || 2000;
+      const color = victim?.color ?? 0x00b2e1;
+      this.spawnTankExplosion(posX, posY, color);
+
+      // 若陣亡者為玩家，啟動死亡觀戰與彈出結算畫面
+      if (victimId === this.playerTank.id) {
+        this.playerTank.active = false;
+        this.camera.addShake(12.0);
+
+        let killerName = 'a Shape';
+        if (killerId && killerId > 0) {
+          const killerTank = this.findTankById(killerId);
+          if (killerTank) {
+            killerName = killerTank.name;
+            this.camera.spectateTarget = killerTank;
+          }
+        }
+        if (!this.camera.spectateTarget) {
+          this.camera.spectateTarget = { x: posX, y: posY };
+        }
+
+        const survivalSecs = this.playerSessionTicks / SIM_TICK_RATE;
+        this.hud.gameOverModal.show({
+          killerName,
+          finalScore: this.playerTank.score,
+          finalLevel: this.playerTank.level,
+          finalClass: this.playerTank.definition.name,
+          survivalSeconds: survivalSecs,
+          tanksKilled: this.playerKills,
+        });
+      }
+
+      // 若擊殺者為玩家，增加擊殺統計並顯示浮動加分 Toast
+      if (killerId === this.playerTank.id && victim) {
+        this.playerKills++;
+        this.hud.killToast.show(victim.name, victim.score);
+        this.camera.addShake(4.0);
+      }
+    });
+
+    this.onKeyDownBound = (e: KeyboardEvent) => {
+      if (this.hud.gameOverModal.visible) {
+        if (e.code === 'Enter' || e.code === 'Space') {
+          this.hud.gameOverModal.triggerRespawn();
+        }
+      }
+    };
+    window.addEventListener('keydown', this.onKeyDownBound);
 
     this.loop = new GameLoop(this.update.bind(this));
     this.onResizeBound = this.handleResize.bind(this);
@@ -151,10 +232,12 @@ export class Game {
     this.gridRenderer.init(this.renderer.app);
     this.shapeRenderer.init(this.renderer);
     this.bulletRenderer.init(this.renderer);
+    this.particleRenderer.init(this.renderer);
 
     this.renderer.worldContainer.addChild(this.gridRenderer.container);
     this.renderer.worldContainer.addChild(this.shapeRenderer.container);
     this.renderer.worldContainer.addChild(this.bulletRenderer.container);
+    this.renderer.worldContainer.addChild(this.particleRenderer.container);
     this.renderer.worldContainer.addChild(this.multiTankRenderer.container);
     this.renderer.worldContainer.addChild(this.healthBarRenderer.container);
 
@@ -260,6 +343,21 @@ export class Game {
       // (g2) AI 坦克生態動態維持與重生佇列
       this.spawnSystem.update(this.currentTick, this.playerTank);
 
+      // (g3) 玩家活躍時間計時與粒子生命週期推進
+      if (this.playerTank.active) {
+        this.playerSessionTicks++;
+      }
+      const pCap = this.particlePool.capacity;
+      for (let p = 0; p < pCap; p++) {
+        if (this.particlePool.isActive(p)) {
+          const part = this.particlePool.items[p];
+          part.step();
+          if (!part.active) {
+            this.particlePool.release(p);
+          }
+        }
+      }
+
       const tickDuration = performance.now() - tickStart;
 
       // (h) 記錄實際 TPS 頻率與耗時
@@ -314,6 +412,7 @@ export class Game {
     );
     this.shapeRenderer.update(this.shapeSystem.shapes, alpha, visibleBounds);
     this.bulletRenderer.update(this.bulletPool, alpha, visibleBounds);
+    this.particleRenderer.update(this.particlePool, alpha, visibleBounds);
     this.healthBarRenderer.update(
       this.allTanks,
       this.shapeSystem.shapes,
@@ -350,14 +449,142 @@ export class Game {
     }
   }
 
+  /**
+   * 玩家死亡後以原版折半等級與安全座標重生
+   */
+  public respawnPlayer(): void {
+    const deadLevel = this.playerTank.level;
+    const respawnLevel = Math.max(1, Math.floor(deadLevel / 2));
+    const respawnScore = SCORE_FOR_LEVEL[respawnLevel - 1] ?? 0;
+
+    const safePos = this.spawnSystem.getRandomSpawnPosition(
+      2000,
+      2000,
+      this.playerTank.id,
+    );
+    this.playerTank.setClass(BASIC_TANK_DEFINITION);
+    this.playerTank.respawn(safePos.x, safePos.y);
+    this.playerTank.level = respawnLevel;
+    this.playerTank.score = respawnScore;
+    this.playerTank.statPoints = pointsForLevel(respawnLevel);
+    this.playerTank.statLevels.fill(0);
+    recomputeDerivedStats(this.playerTank);
+    this.eventBus.emitClassChanged(this.playerTank.id, 'basic');
+
+    this.playerTank.invulnerableTicks = SPAWN_INVULNERABLE_TICKS; // 75 ticks (3 秒無敵)
+    this.camera.spectateTarget = null;
+    this.camera.teleport(safePos.x, safePos.y);
+
+    this.playerSessionTicks = 0;
+    this.playerKills = 0;
+
+    this.eventBus.emitLevelUp(this.playerTank.id, this.playerTank.level);
+    this.eventBus.emitScoreChanged(this.playerTank.id, this.playerTank.score);
+    this.eventBus.emitStatPointsChanged(
+      this.playerTank.id,
+      this.playerTank.statPoints,
+    );
+    this.levelingSystem.checkEvolution(this.playerTank, this.eventBus);
+  }
+
+  public spawnTankExplosion(x: number, y: number, color: number): void {
+    const count = 32;
+    for (let i = 0; i < count; i++) {
+      const idx = this.particlePool.acquire();
+      if (idx < 0) break;
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 2.5 + Math.random() * 8.5;
+      const radius = 3.5 + Math.random() * 6.5;
+      const life = 20 + Math.floor(Math.random() * 15);
+      this.particlePool.items[idx].init(
+        x,
+        y,
+        Math.cos(angle) * speed,
+        Math.sin(angle) * speed,
+        color,
+        radius,
+        life,
+        0.93,
+      );
+    }
+  }
+
+  public spawnShapeExplosion(x: number, y: number, kind: ShapeType): void {
+    let color = 0xffe869; // 方塊黃
+    let count = 14;
+    let radiusBase = 4;
+    if (kind === 'triangle') {
+      color = 0xfc7677; // 三角紅
+      count = 18;
+      radiusBase = 5;
+    } else if (kind === 'pentagon') {
+      color = 0x768dfc; // 五邊形藍
+      count = 26;
+      radiusBase = 6;
+    }
+
+    for (let i = 0; i < count; i++) {
+      const idx = this.particlePool.acquire();
+      if (idx < 0) break;
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 2.0 + Math.random() * 5.5;
+      const radius = Math.max(2, radiusBase + (Math.random() - 0.5) * 3);
+      const life = 14 + Math.floor(Math.random() * 10);
+      this.particlePool.items[idx].init(
+        x,
+        y,
+        Math.cos(angle) * speed,
+        Math.sin(angle) * speed,
+        color,
+        radius,
+        life,
+        0.91,
+      );
+    }
+  }
+
+  public spawnHitSparks(x: number, y: number, color = 0xfffae0): void {
+    const count = 4;
+    for (let i = 0; i < count; i++) {
+      const idx = this.particlePool.acquire();
+      if (idx < 0) break;
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 3.0 + Math.random() * 4.5;
+      const radius = 2.0 + Math.random() * 1.5;
+      const life = 6 + Math.floor(Math.random() * 4);
+      this.particlePool.items[idx].init(
+        x,
+        y,
+        Math.cos(angle) * speed,
+        Math.sin(angle) * speed,
+        color,
+        radius,
+        life,
+        0.88,
+      );
+    }
+  }
+
+  private findTankById(id: number): Tank | null {
+    const len = this.allTanks.length;
+    for (let i = 0; i < len; i++) {
+      if (this.allTanks[i].id === id) {
+        return this.allTanks[i];
+      }
+    }
+    return null;
+  }
+
   public destroy(): void {
     this.loop.stop();
     window.removeEventListener('resize', this.onResizeBound);
+    window.removeEventListener('keydown', this.onKeyDownBound);
     this.inputManager.detach();
     this.hud.destroy();
     this.gridRenderer.destroy();
     this.shapeRenderer.destroy();
     this.bulletRenderer.destroy();
+    this.particleRenderer.destroy();
     this.tankRenderer.destroy();
     this.healthBarRenderer.destroy();
     this.renderer.destroy();

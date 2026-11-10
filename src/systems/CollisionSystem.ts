@@ -3,8 +3,6 @@ import {
   COLLISION_PUSH_FACTOR,
   TANK_BODY_CONTACT_COOLDOWN_TICKS,
   TANK_COLLISION_SEPARATION_IMPULSE,
-  WORLD_HEIGHT,
-  WORLD_WIDTH,
 } from '../config/constants';
 import type { EventBus } from '../core/EventBus';
 import type { ObjectPool } from '../core/ObjectPool';
@@ -125,6 +123,7 @@ export class CollisionSystem {
 
             // 形狀承受傷害
             shape.hp -= damageDealt;
+            eventBus.emitBulletHit(bullet.x, bullet.y, 0xfffae0);
 
             // 施加擊退衝量
             const bdx = bullet.x - bullet.prevX;
@@ -141,7 +140,12 @@ export class CollisionSystem {
             if (shape.hp <= 0) {
               shape.active = false;
               shapeSystem.activeCount--;
-              eventBus.emitShapeDestroyed(shape.kind, bullet.ownerId);
+              eventBus.emitShapeDestroyed(
+                shape.kind,
+                bullet.ownerId,
+                shape.x,
+                shape.y,
+              );
             }
           }
         } else if (type === ENTITY_TYPE_TANK) {
@@ -186,12 +190,16 @@ export class CollisionSystem {
 
             targetTank.hp -= damageDealt;
             targetTank.lastDamageTick = currentTick;
+            eventBus.emitBulletHit(bullet.x, bullet.y, bullet.color);
+
             if (targetTank.hp <= 0) {
               targetTank.active = false;
-              eventBus.emitTankDied(targetTank.id, bullet.ownerId);
-              if (!targetTank.isAi) {
-                targetTank.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
-              }
+              eventBus.emitTankDied(
+                targetTank.id,
+                bullet.ownerId,
+                targetTank.x,
+                targetTank.y,
+              );
             }
           }
         }
@@ -271,15 +279,17 @@ export class CollisionSystem {
             if (shape.hp <= 0) {
               shape.active = false;
               shapeSystem.activeCount--;
-              eventBus.emitShapeDestroyed(shape.kind, tank.id);
+              eventBus.emitShapeDestroyed(
+                shape.kind,
+                tank.id,
+                shape.x,
+                shape.y,
+              );
             }
 
             if (tank.hp <= 0) {
               tank.active = false;
-              eventBus.emitTankDied(tank.id, -1);
-              if (!tank.isAi) {
-                tank.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
-              }
+              eventBus.emitTankDied(tank.id, -1, tank.x, tank.y);
             }
           }
         }
@@ -386,18 +396,12 @@ export class CollisionSystem {
 
               if (tankA.hp <= 0) {
                 tankA.active = false;
-                eventBus.emitTankDied(tankA.id, tankB.id);
-                if (!tankA.isAi) {
-                  tankA.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
-                }
+                eventBus.emitTankDied(tankA.id, tankB.id, tankA.x, tankA.y);
               }
 
               if (tankB.hp <= 0) {
                 tankB.active = false;
-                eventBus.emitTankDied(tankB.id, tankA.id);
-                if (!tankB.isAi) {
-                  tankB.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
-                }
+                eventBus.emitTankDied(tankB.id, tankA.id, tankB.x, tankB.y);
               }
             }
           }

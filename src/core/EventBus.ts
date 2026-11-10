@@ -1,8 +1,18 @@
 import type { TankClassId } from '../config/tanks.config';
 import type { ShapeType } from '../entities/Shape';
 
-type ShapeDestroyedHandler = (kind: ShapeType, killerId: number) => void;
-type TankDiedHandler = (victimId: number, killerId?: number) => void;
+type ShapeDestroyedHandler = (
+  kind: ShapeType,
+  killerId: number,
+  x?: number,
+  y?: number,
+) => void;
+type TankDiedHandler = (
+  victimId: number,
+  killerId?: number,
+  victimX?: number,
+  victimY?: number,
+) => void;
 type LevelUpHandler = (tankId: number, level: number) => void;
 type StatPointsChangedHandler = (tankId: number, points: number) => void;
 type StatUpgradeRequestedHandler = (statIndex: number) => void;
@@ -13,6 +23,7 @@ type EvolutionAvailableHandler = (
   tankId: number,
   candidates: TankClassId[],
 ) => void;
+type BulletHitHandler = (x: number, y: number, color: number) => void;
 
 /**
  * 零配置型別安全事件匯流排
@@ -28,6 +39,7 @@ export class EventBus {
   private classUpgradeRequestedHandlers: ClassUpgradeRequestedHandler[] = [];
   private classChangedHandlers: ClassChangedHandler[] = [];
   private evolutionAvailableHandlers: EvolutionAvailableHandler[] = [];
+  private bulletHitHandlers: BulletHitHandler[] = [];
 
   // 1. Shape Destroyed
   public onShapeDestroyed(handler: ShapeDestroyedHandler): void {
@@ -41,10 +53,15 @@ export class EventBus {
     }
   }
 
-  public emitShapeDestroyed(kind: ShapeType, killerId: number): void {
+  public emitShapeDestroyed(
+    kind: ShapeType,
+    killerId: number,
+    x = 0,
+    y = 0,
+  ): void {
     const len = this.shapeDestroyedHandlers.length;
     for (let i = 0; i < len; i++) {
-      this.shapeDestroyedHandlers[i](kind, killerId);
+      this.shapeDestroyedHandlers[i](kind, killerId, x, y);
     }
   }
 
@@ -60,10 +77,15 @@ export class EventBus {
     }
   }
 
-  public emitTankDied(victimId: number, killerId = -1): void {
+  public emitTankDied(
+    victimId: number,
+    killerId = -1,
+    victimX = 0,
+    victimY = 0,
+  ): void {
     const len = this.tankDiedHandlers.length;
     for (let i = 0; i < len; i++) {
-      this.tankDiedHandlers[i](victimId, killerId);
+      this.tankDiedHandlers[i](victimId, killerId, victimX, victimY);
     }
   }
 
@@ -203,6 +225,25 @@ export class EventBus {
     }
   }
 
+  // 10. Bullet Hit (微粒火花特效)
+  public onBulletHit(handler: BulletHitHandler): void {
+    this.bulletHitHandlers.push(handler);
+  }
+
+  public offBulletHit(handler: BulletHitHandler): void {
+    const idx = this.bulletHitHandlers.indexOf(handler);
+    if (idx !== -1) {
+      this.bulletHitHandlers.splice(idx, 1);
+    }
+  }
+
+  public emitBulletHit(x: number, y: number, color = 0xfffae0): void {
+    const len = this.bulletHitHandlers.length;
+    for (let i = 0; i < len; i++) {
+      this.bulletHitHandlers[i](x, y, color);
+    }
+  }
+
   public clear(): void {
     this.shapeDestroyedHandlers.length = 0;
     this.tankDiedHandlers.length = 0;
@@ -213,5 +254,6 @@ export class EventBus {
     this.classUpgradeRequestedHandlers.length = 0;
     this.classChangedHandlers.length = 0;
     this.evolutionAvailableHandlers.length = 0;
+    this.bulletHitHandlers.length = 0;
   }
 }

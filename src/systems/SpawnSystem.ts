@@ -223,7 +223,7 @@ export class SpawnSystem {
     return 30; // Tier 3 固定為 Lv 30
   }
 
-  private getRandomSpawnPosition(
+  public getRandomSpawnPosition(
     avoidX: number,
     avoidY: number,
     selfBotId?: number,

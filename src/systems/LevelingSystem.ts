@@ -48,7 +48,8 @@ export class LevelingSystem {
         }
       }
       const victim = this.findTank(victimId);
-      if (victim) {
+      // 玩家 (id === 1) 死亡不在此處立即重置為 Lv 1，由 Game.respawnPlayer() 在玩家點擊重生時結算折半等級
+      if (victim && victim.id !== 1) {
         this.resetTank(victim, eventBus);
       }
     });

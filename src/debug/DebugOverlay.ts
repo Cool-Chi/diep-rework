@@ -202,6 +202,7 @@ export class DebugOverlay {
       <div>HealthBars Pool: <b>${this.game.healthBarRenderer.activeCount}</b> / ${this.game.healthBarRenderer.capacity} active</div>
       <div>Bullets: ${bulletAlert ? `<b style="color:#ff3333">${activeBullets} active / ${visibleBullets} visible [ALERT: INVISIBLE!]</b>` : `<b>${activeBullets}</b> active / <b>${visibleBullets}</b> visible`}</div>
       <div>Shapes: ${shapeAlert ? `<b style="color:#ff3333">${activeShapes} active / ${visibleShapes} visible [ALERT: INVISIBLE!]</b>` : `<b>${activeShapes}</b> active / <b>${visibleShapes}</b> visible`}</div>
+      <div>Particles: <b>${this.game.particleRenderer.visibleCount}</b> visible / <b>${this.game.particlePool.capacity}</b> pool</div>
       <div style="border-top:1px dashed rgba(255,255,255,0.15);margin:4px 0;padding-top:4px;">
         Level: <b style="color:#ffff00">${tank.level}</b>/30 | Score: <b>${tank.score}</b> (next: <b>${nextScore}</b>)
       </div>
@@ -624,6 +625,42 @@ export class DebugOverlay {
       '#1b4965',
     );
     btnContainer.appendChild(spawnAssassinAiBtn);
+
+    // M6 功能測試按鈕：模擬玩家死亡與粒子爆發
+    const suicideBtn = createBtn(
+      'Trigger GameOver',
+      () => {
+        this.game.playerTank.hp = 0;
+        this.game.eventBus.emitTankDied(
+          this.game.playerTank.id,
+          -1,
+          this.game.playerTank.x,
+          this.game.playerTank.y,
+        );
+        this.renderMetrics();
+      },
+      '#c1121f',
+    );
+    btnContainer.appendChild(suicideBtn);
+
+    const particleBurstBtn = createBtn(
+      'Burst 100 Particles',
+      () => {
+        this.game.spawnTankExplosion(
+          this.game.playerTank.x,
+          this.game.playerTank.y,
+          0x00ff88,
+        );
+        this.game.spawnShapeExplosion(
+          this.game.playerTank.x + 40,
+          this.game.playerTank.y,
+          'pentagon',
+        );
+        this.renderMetrics();
+      },
+      '#7b2cbf',
+    );
+    btnContainer.appendChild(particleBurstBtn);
 
     el.appendChild(btnContainer);
 

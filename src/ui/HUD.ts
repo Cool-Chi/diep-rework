@@ -3,7 +3,9 @@ import type { Camera } from '../core/Camera';
 import type { EventBus } from '../core/EventBus';
 import type { Tank } from '../entities/Tank';
 import { EvolutionPanel } from './EvolutionPanel';
+import { GameOverModal } from './GameOverModal';
 import { uiScale } from './hudMath';
+import { KillToast } from './KillToast';
 import { Leaderboard } from './Leaderboard';
 import { MiniMap } from './MiniMap';
 import { ScoreBar } from './ScoreBar';
@@ -11,7 +13,7 @@ import { StatUpgradePanel } from './StatUpgradePanel';
 
 /**
  * 根 HUD 容器與管理器 (All-in-Canvas UI)
- * 統一管理屬性升級面板、轉職卡牌面板、經驗分數條、排行榜與小地圖
+ * 統一管理屬性升級面板、轉職卡牌面板、經驗分數條、排行榜、小地圖、擊殺廣播與死亡結算
  */
 export class HUD {
   public readonly container = new Container();
@@ -21,19 +23,24 @@ export class HUD {
   public readonly scoreBar = new ScoreBar();
   public readonly miniMap = new MiniMap();
   public readonly leaderboard = new Leaderboard();
+  public readonly killToast = new KillToast();
+  public readonly gameOverModal: GameOverModal;
 
   public visible = true;
 
-  constructor(eventBus: EventBus) {
+  constructor(eventBus: EventBus, onRespawn?: () => void) {
     this.statPanel = new StatUpgradePanel(eventBus);
     this.evolutionPanel = new EvolutionPanel(eventBus);
+    this.gameOverModal = new GameOverModal(onRespawn);
 
-    // 依層次添加至 HUD 根容器（轉職面板在左上、屬性在左下、分數在底中、小地圖在右下、排行榜在右上）
+    // 依層次添加至 HUD 根容器（轉職面板在左上、屬性在左下、分數在底中、小地圖在右下、排行榜在右上、擊殺浮動與結算置頂）
     this.container.addChild(this.statPanel.container);
     this.container.addChild(this.evolutionPanel.container);
     this.container.addChild(this.scoreBar.container);
     this.container.addChild(this.miniMap.container);
     this.container.addChild(this.leaderboard.container);
+    this.container.addChild(this.killToast.container);
+    this.container.addChild(this.gameOverModal.container);
   }
 
   /**
@@ -46,6 +53,8 @@ export class HUD {
     this.scoreBar.resize(screenWidth, screenHeight, scale);
     this.miniMap.resize(screenWidth, screenHeight, scale);
     this.leaderboard.resize(screenWidth, screenHeight, scale);
+    this.killToast.resize(screenWidth, screenHeight, scale);
+    this.gameOverModal.resize(screenWidth, screenHeight, scale);
   }
 
   /**
@@ -54,6 +63,7 @@ export class HUD {
   public isOverUi(screenX: number, screenY: number): boolean {
     if (!this.visible) return false;
     return (
+      this.gameOverModal.containsPoint(screenX, screenY) ||
       this.evolutionPanel.containsPoint(screenX, screenY) ||
       this.statPanel.containsPoint(screenX, screenY) ||
       this.miniMap.containsPoint(screenX, screenY)
@@ -92,8 +102,15 @@ export class HUD {
     this.container.visible = this.visible;
     if (!this.visible) return;
 
-    this.statPanel.update(playerTank);
-    this.evolutionPanel.update(dtSeconds);
+    if (this.gameOverModal.visible) {
+      this.statPanel.container.visible = false;
+      this.evolutionPanel.container.visible = false;
+    } else {
+      this.statPanel.update(playerTank);
+      this.evolutionPanel.update(dtSeconds);
+    }
+    this.killToast.update(dtSeconds);
+    this.gameOverModal.update(dtSeconds);
     this.scoreBar.update(playerTank, dtSeconds);
     this.miniMap.update(playerTank, alpha, camera, allTanks);
     this.leaderboard.update(playerTank, allTanks ?? [playerTank]);

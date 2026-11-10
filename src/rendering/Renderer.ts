@@ -45,8 +45,8 @@ export class Renderer {
     const screenCenterY = camera.screenHeight * 0.5;
 
     this.worldContainer.position.set(
-      screenCenterX - camera.x * scale,
-      screenCenterY - camera.y * scale,
+      screenCenterX - camera.renderX * scale,
+      screenCenterY - camera.renderY * scale,
     );
   }
 
