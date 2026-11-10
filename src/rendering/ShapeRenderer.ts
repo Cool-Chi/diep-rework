@@ -13,6 +13,7 @@ import {
 import type { VisibleBounds } from '../core/Camera';
 import type { Shape, ShapeType } from '../entities/Shape';
 import { isInBounds } from './culling';
+import { getRenderPosition, type RenderPositionOut } from './getRenderPosition';
 import type { Renderer } from './Renderer';
 
 /**
@@ -23,6 +24,7 @@ export class ShapeRenderer {
   public readonly container = new Container();
   private readonly sprites: Sprite[] = [];
   private textures: Record<ShapeType, Texture> | null = null;
+  private readonly tempPos: RenderPositionOut = { x: 0, y: 0 };
   public visibleCount = 0;
 
   /**
@@ -110,8 +112,9 @@ export class ShapeRenderer {
         continue;
       }
 
-      const rx = shape.prevX + (shape.x - shape.prevX) * alpha;
-      const ry = shape.prevY + (shape.y - shape.prevY) * alpha;
+      getRenderPosition(shape, alpha, this.tempPos);
+      const rx = this.tempPos.x;
+      const ry = this.tempPos.y;
 
       // 手動邊界裁切（考慮 margin）
       if (!isInBounds(rx, ry, shape.radius, visibleBounds, margin)) {

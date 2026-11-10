@@ -216,6 +216,23 @@ export const SHAPE_DAMPING = 0.96;
 export const COLLISION_PUSH_FACTOR = 0.6;
 export const BULLET_KNOCKBACK_FACTOR = 0.4;
 
+/**
+ * 血條在 Y 軸相對於實體中心的偏移係數 (offsetY = radius * HEALTHBAR_OFFSET_FACTOR)
+ * TODO(tune): 未查證，依視覺手感調整（置於實體圓形底緣下方）
+ */
+export const HEALTHBAR_OFFSET_FACTOR = 1.35;
+
+/**
+ * 血條寬度相對於實體半徑的倍率 (width = radius * HEALTHBAR_WIDTH_FACTOR)
+ * TODO(tune): 未查證，依視覺手感調整
+ */
+export const HEALTHBAR_WIDTH_FACTOR = 1.6;
+
+/**
+ * 血條世界高度（世界單位常數）
+ */
+export const HEALTHBAR_HEIGHT = 4.0;
+
 // ==========================================
 // 7. 空間雜湊網格 (SpatialHash)
 // ==========================================

@@ -10,6 +10,11 @@ import { Tank } from '../entities/Tank';
 import { PhysicsWorld } from '../physics/PhysicsWorld';
 import { BulletRenderer } from '../rendering/BulletRenderer';
 import { GridRenderer } from '../rendering/GridRenderer';
+import {
+  getRenderPosition,
+  type RenderPositionOut,
+} from '../rendering/getRenderPosition';
+import { HealthBarRenderer } from '../rendering/HealthBarRenderer';
 import { Renderer } from '../rendering/Renderer';
 import { ShapeRenderer } from '../rendering/ShapeRenderer';
 import { TankRenderer } from '../rendering/TankRenderer';
@@ -63,8 +68,10 @@ export class Game {
   public readonly shapeRenderer = new ShapeRenderer();
   public readonly bulletRenderer = new BulletRenderer();
   public readonly tankRenderer = new TankRenderer();
+  public readonly healthBarRenderer = new HealthBarRenderer();
   public readonly hud: HUD;
 
+  private readonly tempTankRenderPos: RenderPositionOut = { x: 0, y: 0 };
   private loop: GameLoop;
   private devOverlay: DebugOverlay | null = null;
   private onResizeBound: () => void;
@@ -108,6 +115,7 @@ export class Game {
     this.renderer.worldContainer.addChild(this.shapeRenderer.container);
     this.renderer.worldContainer.addChild(this.bulletRenderer.container);
     this.renderer.worldContainer.addChild(this.tankRenderer.container);
+    this.renderer.worldContainer.addChild(this.healthBarRenderer.container);
 
     // 4. 掛載 HUD 介面層並設定初始佈局
     this.renderer.hudContainer.addChild(this.hud.container);
@@ -201,27 +209,40 @@ export class Game {
       }
     }
 
-    // --- 渲染插值與表現階段 ---
+    // ========================================================
+    // 固定渲染順序（嚴格遵守七步流水線，避免抖動與幀差）：
+    // ① FixedStepper 跑完所有 tick
+    // ② 計算 alpha
+    // ③ Camera.update（使用插值後的坦克位置）
+    // ④ 套用 worldContainer 變換
+    // ⑤ 更新世界內所有 Sprite（含血條）
+    // ⑥ 更新 HUD（小地圖、分數列等）
+    // ⑦ render
+    // ========================================================
+
+    // ② 計算 alpha 與坦克插值顯示位置
     const alpha = stepResult.alpha;
+    getRenderPosition(this.playerTank, alpha, this.tempTankRenderPos);
+    const renderX = this.tempTankRenderPos.x;
+    const renderY = this.tempTankRenderPos.y;
+
+    // ③ Camera.update（使用插值後的坦克位置與視野縮放）
+    this.camera.targetLevel = this.playerTank.level;
+    this.camera.setTarget(renderX, renderY);
+    this.camera.update(dtSeconds);
     const visibleBounds = this.camera.getVisibleBounds();
 
-    // 計算坦克插值顯示位置：renderPos = prevPos + (curPos - prevPos) * alpha
-    const renderX =
-      this.playerTank.prevX +
-      (this.playerTank.x - this.playerTank.prevX) * alpha;
-    const renderY =
-      this.playerTank.prevY +
-      (this.playerTank.y - this.playerTank.prevY) * alpha;
+    // ④ 套用 worldContainer 變換（確保後續更新與視錐剔除使用當幀最新相機狀態）
+    this.renderer.updateCamera(this.camera);
 
-    // 計算本渲染幀滑鼠相對於坦克的朝向角度（保證滑鼠跟隨零延遲）
+    // ⑤ 更新世界內所有 Sprite（含血條，均在世界座標下計算）
+    const renderStartTime = performance.now();
     const mouseWorld = this.camera.screenToWorld(
       this.inputManager.mouseScreenX,
       this.inputManager.mouseScreenY,
     );
     const aimAngle = Math.atan2(mouseWorld.y - renderY, mouseWorld.x - renderX);
 
-    // 更新各圖層渲染對象（坦克底盤與砲管隨等級 sizeFactor 放大）
-    const renderStartTime = performance.now();
     this.tankRenderer.update(
       renderX,
       renderY,
@@ -230,25 +251,20 @@ export class Game {
     );
     this.shapeRenderer.update(this.shapeSystem.shapes, alpha, visibleBounds);
     this.bulletRenderer.update(this.bulletPool, alpha, visibleBounds);
-    const renderDuration = performance.now() - renderStartTime;
-
-    // 相機平滑跟隨坦克插值位置（含等級視野縮放）
-    this.camera.targetLevel = this.playerTank.level;
-    this.camera.setTarget(renderX, renderY);
-    this.camera.update(dtSeconds);
-    this.renderer.updateCamera(this.camera);
-
-    // 更新 HUD 介面（含血條、分數條、屬性面板與小地圖）
-    const hudStartTime = performance.now();
-    this.hud.update(
-      this.playerTank,
+    this.healthBarRenderer.update(
       [this.playerTank],
       this.shapeSystem.shapes,
-      this.camera,
-      dtSeconds,
+      alpha,
       visibleBounds,
     );
+    const renderDuration = performance.now() - renderStartTime;
+
+    // ⑥ 更新 HUD（小地圖、分數列等，小地圖玩家點使用插值渲染位置）
+    const hudStartTime = performance.now();
+    this.hud.update(this.playerTank, alpha, this.camera, dtSeconds);
     const hudDuration = performance.now() - hudStartTime;
+
+    // ⑦ render（由 Pixi Application 渲染循環在幀末自動執行）
 
     // 更新除錯面板指標
     if (this.devOverlay) {
@@ -267,6 +283,7 @@ export class Game {
     this.shapeRenderer.destroy();
     this.bulletRenderer.destroy();
     this.tankRenderer.destroy();
+    this.healthBarRenderer.destroy();
     this.renderer.destroy();
     this.devOverlay?.destroy();
   }

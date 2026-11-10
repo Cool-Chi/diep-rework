@@ -1,6 +1,10 @@
 import { Container, Graphics } from 'pixi.js';
 import type { Camera } from '../core/Camera';
 import type { Tank } from '../entities/Tank';
+import {
+  getRenderPosition,
+  type RenderPositionOut,
+} from '../rendering/getRenderPosition';
 import { worldToMinimap } from './hudMath';
 import {
   MINIMAP_BG_ALPHA,
@@ -70,15 +74,18 @@ export class MiniMap {
       .stroke({ color: MINIMAP_BORDER_COLOR, width: 2 });
   }
 
+  private readonly tempPlayerPos: RenderPositionOut = { x: 0, y: 0 };
+
   /**
-   * 每個渲染幀更新玩家位置與相機視野框
+   * 每個渲染幀更新玩家位置與相機視野框（使用插值世界座標與當幀相機狀態）
    * @param playerTank 玩家坦克實體
-   * @param camera 當前相機
+   * @param alpha 插值係數
+   * @param camera 當前相機（已完成當幀 update）
    */
-  public update(playerTank: Tank, camera: Camera): void {
+  public update(playerTank: Tank, alpha: number, camera: Camera): void {
     const mapSize = this.mapSize;
 
-    // 1. 繪製相機視野框
+    // 1. 繪製相機視野框（使用當幀最新相機可視邊界）
     const bounds = camera.getVisibleBounds();
     const pMin = worldToMinimap(bounds.minX, bounds.minY, mapSize);
     const pMax = worldToMinimap(bounds.maxX, bounds.maxY, mapSize);
@@ -90,8 +97,13 @@ export class MiniMap {
       .rect(pMin.x, pMin.y, vpW, vpH)
       .stroke({ color: MINIMAP_VIEWPORT_COLOR, width: 1.2, alpha: 0.7 });
 
-    // 2. 繪製玩家所在點 (藍色圓點)
-    const pPlayer = worldToMinimap(playerTank.x, playerTank.y, mapSize);
+    // 2. 繪製玩家所在點 (藍色圓點，使用插值渲染位置)
+    getRenderPosition(playerTank, alpha, this.tempPlayerPos);
+    const pPlayer = worldToMinimap(
+      this.tempPlayerPos.x,
+      this.tempPlayerPos.y,
+      mapSize,
+    );
     this.playerGraphics.clear();
     this.playerGraphics
       .circle(pPlayer.x, pPlayer.y, 3)

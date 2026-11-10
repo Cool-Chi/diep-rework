@@ -198,7 +198,7 @@ export class DebugOverlay {
       <div>Tick Duration: avg <b>${this.avgTickMs.toFixed(2)}ms</b> | max <b>${this.maxTickMs.toFixed(2)}ms</b></div>
       <div>Render Duration: avg <b>${this.avgRenderMs.toFixed(2)}ms</b> | max <b>${this.maxRenderMs.toFixed(2)}ms</b></div>
       <div>HUD Duration: avg <b>${this.avgHudMs.toFixed(2)}ms</b> | max <b>${this.maxHudMs.toFixed(2)}ms</b></div>
-      <div>HealthBars Pool: <b>${this.game.hud.healthBars.activeCount}</b> / ${this.game.hud.healthBars.capacity} active</div>
+      <div>HealthBars Pool: <b>${this.game.healthBarRenderer.activeCount}</b> / ${this.game.healthBarRenderer.capacity} active</div>
       <div>Bullets: ${bulletAlert ? `<b style="color:#ff3333">${activeBullets} active / ${visibleBullets} visible [ALERT: INVISIBLE!]</b>` : `<b>${activeBullets}</b> active / <b>${visibleBullets}</b> visible`}</div>
       <div>Shapes: ${shapeAlert ? `<b style="color:#ff3333">${activeShapes} active / ${visibleShapes} visible [ALERT: INVISIBLE!]</b>` : `<b>${activeShapes}</b> active / <b>${visibleShapes}</b> visible`}</div>
       <div style="border-top:1px dashed rgba(255,255,255,0.15);margin:4px 0;padding-top:4px;">
@@ -612,6 +612,26 @@ export class DebugOverlay {
       () => this.game.regenSystem.hyperRegenPercent,
       (v) => {
         this.game.regenSystem.hyperRegenPercent = v;
+      },
+    );
+    createSlider(
+      'HealthBar Offset',
+      0.8,
+      2.5,
+      0.05,
+      () => this.game.healthBarRenderer.healthBarOffsetFactor,
+      (v) => {
+        this.game.healthBarRenderer.healthBarOffsetFactor = v;
+      },
+    );
+    createSlider(
+      'HealthBar Width',
+      0.5,
+      3.0,
+      0.05,
+      () => this.game.healthBarRenderer.healthBarWidthFactor,
+      (v) => {
+        this.game.healthBarRenderer.healthBarWidthFactor = v;
       },
     );
 

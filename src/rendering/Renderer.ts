@@ -23,8 +23,10 @@ export class Renderer {
       resolution: window.devicePixelRatio || 1,
       backgroundColor: COLOR_OUT_OF_BOUNDS,
       antialias: true,
+      roundPixels: false,
     });
 
+    // 確保渲染器全域 roundPixels 為 false，保留亞像素精度避免抖動
     targetElement.appendChild(this.app.canvas);
 
     this.app.stage.addChild(this.worldContainer);
