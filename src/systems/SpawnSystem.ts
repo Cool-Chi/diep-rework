@@ -86,11 +86,14 @@ export class SpawnSystem {
       }
     }
 
-    // 2. 補足未滿額且未在佇列中的 AI
+    // 2. 補足未滿額且未在佇列中的 AI (排入重生佇列而非同 tick 突兀原地出現)
     for (let i = 0; i < this.aiTanks.length; i++) {
       const bot = this.aiTanks[i];
       if (!bot.active && !this.isQueued(bot)) {
-        this.spawnAiTank(bot, playerTank.level, playerTank.x, playerTank.y);
+        this.deadAiQueue.push({
+          bot,
+          respawnTick: currentTick + RESPAWN_DELAY_TICKS,
+        });
       }
     }
   }
@@ -100,12 +103,14 @@ export class SpawnSystem {
    */
   public handleTankDeath(victimId: number, currentTick: number): void {
     const bot = this.findAiById(victimId);
-    if (bot?.active) {
+    if (bot) {
       bot.active = false;
-      this.deadAiQueue.push({
-        bot,
-        respawnTick: currentTick + RESPAWN_DELAY_TICKS,
-      });
+      if (!this.isQueued(bot)) {
+        this.deadAiQueue.push({
+          bot,
+          respawnTick: currentTick + RESPAWN_DELAY_TICKS,
+        });
+      }
     }
   }
 
@@ -223,16 +228,84 @@ export class SpawnSystem {
     avoidY: number,
   ): { x: number; y: number } {
     const margin = 200;
-    for (let attempts = 0; attempts < 10; attempts++) {
-      const rx = margin + Math.random() * (MAP_SIZE - margin * 2);
-      const ry = margin + Math.random() * (MAP_SIZE - margin * 2);
-      const dx = rx - avoidX;
-      const dy = ry - avoidY;
-      if (dx * dx + dy * dy >= 400 * 400) {
-        return { x: rx, y: ry };
+    const cornerSize = 900;
+    const centerAvoidSq = 700 * 700; // 嚴禁生成在地圖中央 (2000, 2000) 700 單位以內
+    const playerAvoidSq = 500 * 500;
+
+    for (let attempts = 0; attempts < 15; attempts++) {
+      let rx = 0;
+      let ry = 0;
+
+      // 75% 機率優先生成於地圖四角安全區
+      if (Math.random() < 0.75) {
+        const cornerIdx = Math.floor(Math.random() * 4);
+        switch (cornerIdx) {
+          case 0: // 左上 (NW)
+            rx = margin + Math.random() * cornerSize;
+            ry = margin + Math.random() * cornerSize;
+            break;
+          case 1: // 右上 (NE)
+            rx = MAP_SIZE - margin - Math.random() * cornerSize;
+            ry = margin + Math.random() * cornerSize;
+            break;
+          case 2: // 左下 (SW)
+            rx = margin + Math.random() * cornerSize;
+            ry = MAP_SIZE - margin - Math.random() * cornerSize;
+            break;
+          default:
+            rx = MAP_SIZE - margin - Math.random() * cornerSize;
+            ry = MAP_SIZE - margin - Math.random() * cornerSize;
+            break;
+        }
+      } else {
+        // 25% 生成於外圍邊緣環帶 (距邊緣 200 ~ 800)
+        const side = Math.floor(Math.random() * 4);
+        if (side === 0) {
+          rx = margin + Math.random() * (MAP_SIZE - margin * 2);
+          ry = margin + Math.random() * 600;
+        } else if (side === 1) {
+          rx = margin + Math.random() * (MAP_SIZE - margin * 2);
+          ry = MAP_SIZE - margin - Math.random() * 600;
+        } else if (side === 2) {
+          rx = margin + Math.random() * 600;
+          ry = margin + Math.random() * (MAP_SIZE - margin * 2);
+        } else {
+          rx = MAP_SIZE - margin - Math.random() * 600;
+          ry = margin + Math.random() * (MAP_SIZE - margin * 2);
+        }
+      }
+
+      // 檢查是否遠離避開點（玩家）
+      const pdx = rx - avoidX;
+      const pdy = ry - avoidY;
+      if (pdx * pdx + pdy * pdy < playerAvoidSq) continue;
+
+      // 檢查是否遠離地圖正中央
+      const cdx = rx - MAP_SIZE * 0.5;
+      const cdy = ry - MAP_SIZE * 0.5;
+      if (cdx * cdx + cdy * cdy < centerAvoidSq) continue;
+
+      return { x: rx, y: ry };
+    }
+
+    // 備用方案：選取距離 avoidX, avoidY 最遠的一個角落
+    const candidates = [
+      { x: 300, y: 300 },
+      { x: MAP_SIZE - 300, y: 300 },
+      { x: 300, y: MAP_SIZE - 300 },
+      { x: MAP_SIZE - 300, y: MAP_SIZE - 300 },
+    ];
+    let best = candidates[0];
+    let maxDistSq = -1;
+    for (let i = 0; i < candidates.length; i++) {
+      const c = candidates[i];
+      const d2 = (c.x - avoidX) ** 2 + (c.y - avoidY) ** 2;
+      if (d2 > maxDistSq) {
+        maxDistSq = d2;
+        best = c;
       }
     }
-    return { x: 500, y: 500 };
+    return best;
   }
 
   private isQueued(bot: Tank): boolean {

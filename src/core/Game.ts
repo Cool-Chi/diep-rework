@@ -82,6 +82,9 @@ export class Game {
   public showAiDevLabels = false; // 是否在 AI 頭頂顯示戰術狀態標籤
 
   private readonly tempTankRenderPos: RenderPositionOut = { x: 0, y: 0 };
+  private readonly tempVisibleBoundsTuple: [number, number, number, number] = [
+    0, 0, 0, 0,
+  ];
   private loop: GameLoop;
   private devOverlay: DebugOverlay | null = null;
   private onResizeBound: () => void;
@@ -233,14 +236,13 @@ export class Game {
       // (d) 子彈步進推進與壽命衰減
       this.fireSystem.updateBullets(this.bulletPool);
 
-      // (e) 形狀生態漂移、阻尼與動態補足
+      // (e) 形狀生態漂移、阻尼與動態補足 (零配置複用邊界 Tuple)
       const visibleBounds = this.camera.getVisibleBounds();
-      this.shapeSystem.update([
-        visibleBounds.minX,
-        visibleBounds.minY,
-        visibleBounds.maxX,
-        visibleBounds.maxY,
-      ]);
+      this.tempVisibleBoundsTuple[0] = visibleBounds.minX;
+      this.tempVisibleBoundsTuple[1] = visibleBounds.minY;
+      this.tempVisibleBoundsTuple[2] = visibleBounds.maxX;
+      this.tempVisibleBoundsTuple[3] = visibleBounds.maxY;
+      this.shapeSystem.update(this.tempVisibleBoundsTuple);
 
       // (f) 碰撞檢測與物理結算 (包含玩家、所有 AI 與形狀、子彈)
       this.collisionSystem.update(
@@ -336,6 +338,13 @@ export class Game {
       this.devOverlay.recordRenderDuration(renderDuration);
       this.devOverlay.recordHudDuration(hudDuration);
       this.devOverlay.update();
+    }
+  }
+
+  public toggleGodView(): void {
+    this.camera.isGodView = !this.camera.isGodView;
+    if (this.camera.isGodView) {
+      this.showAiDevLabels = true;
     }
   }
 

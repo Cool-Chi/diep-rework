@@ -95,7 +95,7 @@ export class HUD {
     this.statPanel.update(playerTank);
     this.evolutionPanel.update(dtSeconds);
     this.scoreBar.update(playerTank, dtSeconds);
-    this.miniMap.update(playerTank, alpha, camera);
+    this.miniMap.update(playerTank, alpha, camera, allTanks);
     this.leaderboard.update(playerTank, allTanks ?? [playerTank]);
   }
 

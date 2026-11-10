@@ -37,6 +37,7 @@ interface CardView {
 export class EvolutionPanel {
   public readonly container = new Container();
   public visible = false;
+  public playerTankId = 1; // 玩家坦克 ID，預設為 1
 
   private readonly eventBus: EventBus;
   private readonly cardsContainer = new Container();
@@ -89,11 +90,13 @@ export class EvolutionPanel {
     this.ignoreText.anchor.set(0.5, 0.5);
     this.ignoreContainer.addChild(this.ignoreText);
 
-    // 監聽轉職成功後自動關閉（若無後續進化）
-    this.eventBus.onClassChanged(() => {
-      this.hide();
-      this.isIgnored = false;
-      this.currentCandidates = [];
+    // 監聽轉職成功後自動關閉（若無後續進化，且嚴格限定僅玩家本人轉職才關閉）
+    this.eventBus.onClassChanged((tankId) => {
+      if (tankId === this.playerTankId) {
+        this.hide();
+        this.isIgnored = false;
+        this.currentCandidates = [];
+      }
     });
   }
 

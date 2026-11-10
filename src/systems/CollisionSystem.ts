@@ -181,8 +181,11 @@ export class CollisionSystem {
             targetTank.hp -= damageDealt;
             targetTank.lastDamageTick = currentTick;
             if (targetTank.hp <= 0) {
+              targetTank.active = false;
               eventBus.emitTankDied(targetTank.id, bullet.ownerId);
-              targetTank.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
+              if (!targetTank.isAi) {
+                targetTank.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
+              }
             }
           }
         }
@@ -232,7 +235,7 @@ export class CollisionSystem {
 
           // 質量反比推開
           tank.x -= nx * overlap * (mShape * invTotal) * this.pushFactor;
-          tank.y -= ny * overlap * (mShape * invTotal) * this.pushFactor;
+          tank.y -= ny * overlap * (mTank * invTotal) * this.pushFactor;
           shape.x += nx * overlap * (mTank * invTotal) * this.pushFactor;
           shape.y += ny * overlap * (mTank * invTotal) * this.pushFactor;
 
@@ -265,14 +268,113 @@ export class CollisionSystem {
           }
 
           if (tank.hp <= 0) {
+            tank.active = false;
             eventBus.emitTankDied(tank.id, -1);
-            tank.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
+            if (!tank.isAi) {
+              tank.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
+            }
           }
         }
       }
     }
 
-    // 4. 形狀 vs 形狀碰撞（純推開與衝量，不造成傷害）
+    // 4. 坦克 vs 坦克碰撞（推開、衝量與雙向撞擊傷害）
+    for (let t = 0; t < tankCount; t++) {
+      const tankA = tanks[t];
+      if (!tankA.active) continue;
+
+      const candidateCount = this.spatialHash.query(
+        tankA.x,
+        tankA.y,
+        tankA.radius,
+        25,
+      );
+
+      for (let c = 0; c < candidateCount; c++) {
+        const code = this.spatialHash.queryResults[c];
+        if (decodeEntityType(code) !== ENTITY_TYPE_TANK) continue;
+
+        const otherId = decodeEntityIndex(code);
+        if (otherId <= tankA.id) continue; // 每對坦克每 tick 僅結算一次
+
+        let tankB: Tank | null = null;
+        for (let j = 0; j < tankCount; j++) {
+          if (tanks[j].id === otherId) {
+            tankB = tanks[j];
+            break;
+          }
+        }
+        if (!tankB?.active) continue;
+
+        const dx = tankB.x - tankA.x;
+        const dy = tankB.y - tankA.y;
+        const distSq = dx * dx + dy * dy;
+        const minDist = tankA.radius + tankB.radius;
+
+        if (distSq < minDist * minDist) {
+          let dist = Math.sqrt(distSq);
+          let nx = 1;
+          let ny = 0;
+          if (dist > 0.0001) {
+            nx = dx / dist;
+            ny = dy / dist;
+          } else {
+            dist = 0.0001;
+          }
+
+          const overlap = minDist - dist;
+          const mA = tankA.radius * tankA.radius;
+          const mB = tankB.radius * tankB.radius;
+          const invTotal = 1 / (mA + mB);
+
+          // 質量反比推開
+          tankA.x -= nx * overlap * (mB * invTotal) * this.pushFactor;
+          tankA.y -= ny * overlap * (mB * invTotal) * this.pushFactor;
+          tankB.x += nx * overlap * (mA * invTotal) * this.pushFactor;
+          tankB.y += ny * overlap * (mA * invTotal) * this.pushFactor;
+
+          // 彈性碰撞衝量 (restitution = 0.4)
+          const rvx = tankB.vx - tankA.vx;
+          const rvy = tankB.vy - tankA.vy;
+          const velAlongNormal = rvx * nx + rvy * ny;
+          if (velAlongNormal < 0) {
+            const restitution = 0.4;
+            const j = (-(1 + restitution) * velAlongNormal) / (1 / mA + 1 / mB);
+            tankA.vx -= (j / mA) * nx;
+            tankA.vy -= (j / mA) * ny;
+            tankB.vx += (j / mB) * nx;
+            tankB.vy += (j / mB) * ny;
+          }
+
+          // 雙向撞擊傷害（以 bodyDamageToTank 計算）
+          const damageToA = tankB.bodyDamageToTank;
+          const damageToB = tankA.bodyDamageToTank;
+
+          tankA.hp -= damageToA;
+          tankB.hp -= damageToB;
+          tankA.lastDamageTick = currentTick;
+          tankB.lastDamageTick = currentTick;
+
+          if (tankA.hp <= 0) {
+            tankA.active = false;
+            eventBus.emitTankDied(tankA.id, tankB.id);
+            if (!tankA.isAi) {
+              tankA.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
+            }
+          }
+
+          if (tankB.hp <= 0) {
+            tankB.active = false;
+            eventBus.emitTankDied(tankB.id, tankA.id);
+            if (!tankB.isAi) {
+              tankB.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
+            }
+          }
+        }
+      }
+    }
+
+    // 5. 形狀 vs 形狀碰撞（純推開與衝量，不造成傷害）
     for (let s = 0; s < shapeCapacity; s++) {
       const shapeA = shapes[s];
       if (!shapeA.active) continue;

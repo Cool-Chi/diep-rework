@@ -150,11 +150,13 @@ export class AISystem {
         bot.input.moveY = -dy / d;
       }
     } else {
-      // 無形狀時悠閒遊蕩
+      // 無形狀時平滑巡邏漫遊 (每 100 ticks 緩慢微調航向，巡邏地圖廣大區域)
       bot.input.shooting = false;
-      const angle = (bot.id * 1.3 + bot.aiStateTimer * 0.02) % (Math.PI * 2);
-      bot.input.moveX = Math.cos(angle) * 0.6;
-      bot.input.moveY = Math.sin(angle) * 0.6;
+      const angle =
+        (bot.id * 1.7 + Math.floor(bot.aiStateTimer / 100) * 0.8) %
+        (Math.PI * 2);
+      bot.input.moveX = Math.cos(angle) * 0.65;
+      bot.input.moveY = Math.sin(angle) * 0.65;
       bot.input.aimX = bot.x + Math.cos(angle) * 100;
       bot.input.aimY = bot.y + Math.sin(angle) * 100;
     }
@@ -243,14 +245,13 @@ export class AISystem {
       }
     }
 
-    // 無特定威脅時向地圖中心安全區滑行
-    const toCenterX = MAP_SIZE * 0.5 - bot.x;
-    const toCenterY = MAP_SIZE * 0.5 - bot.y;
-    const cd = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY);
-    if (cd > 0) {
-      bot.input.moveX = toCenterX / cd;
-      bot.input.moveY = toCenterY / cd;
-    }
+    // 無特定威脅時沿巡邏方向脫離危險區，停火並自然回血
+    const angle =
+      (bot.id * 2.3 + Math.floor(bot.aiStateTimer / 120)) % (Math.PI * 2);
+    bot.input.moveX = Math.cos(angle) * 0.7;
+    bot.input.moveY = Math.sin(angle) * 0.7;
+    bot.input.aimX = bot.x + Math.cos(angle) * 100;
+    bot.input.aimY = bot.y + Math.sin(angle) * 100;
     bot.input.shooting = false;
   }
 

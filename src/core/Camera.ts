@@ -36,6 +36,7 @@ export class Camera {
   public fovLevelScaling = FOV_LEVEL_SCALING;
   public baseScale: number = CAMERA_BASE_SCALE;
   public smoothK: number = CAMERA_SMOOTH_K;
+  public isGodView = false; // 調試專用上帝全圖鳥瞰視角開關
 
   // 預先配置可複用的邊界與座標物件，避免每幀產生垃圾回收
   private readonly bounds: VisibleBounds = {
@@ -62,6 +63,10 @@ export class Camera {
    * 縮放 = CAMERA_BASE_SCALE ÷ (fovMultiplier * 等級視野放大率)
    */
   public get scale(): number {
+    if (this.isGodView) {
+      // 上帝鳥瞰視角：將 4000x4000 封閉地圖完整縮放至螢幕內 (4200 單位留安全邊距)
+      return Math.min(this.screenWidth / 4200, this.screenHeight / 4200);
+    }
     const levelFactor = 1 + (this.targetLevel - 1) * this.fovLevelScaling;
     return this.baseScale / (this.fovMultiplier * levelFactor);
   }
@@ -88,6 +93,11 @@ export class Camera {
    * 設定平滑跟隨的目標座標（請傳入插值後的坦克顯示位置）
    */
   public setTarget(x: number, y: number): void {
+    if (this.isGodView) {
+      this.targetX = 2000;
+      this.targetY = 2000;
+      return;
+    }
     this.targetX = x;
     this.targetY = y;
   }
@@ -100,8 +110,13 @@ export class Camera {
   public update(dtSeconds: number): void {
     if (dtSeconds <= 0) return;
 
+    if (this.isGodView) {
+      this.targetX = 2000;
+      this.targetY = 2000;
+    }
+
     // 與幀率無關的平滑權重：1 - exp(-k * dt)
-    const factor = 1 - Math.exp(-this.smoothK * dtSeconds);
+    const factor = 1 - Math.exp(this.smoothK * -dtSeconds);
 
     this.x += (this.targetX - this.x) * factor;
     this.y += (this.targetY - this.y) * factor;

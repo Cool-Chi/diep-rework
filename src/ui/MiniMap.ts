@@ -77,12 +77,18 @@ export class MiniMap {
   private readonly tempPlayerPos: RenderPositionOut = { x: 0, y: 0 };
 
   /**
-   * 每個渲染幀更新玩家位置與相機視野框（使用插值世界座標與當幀相機狀態）
+   * 每個渲染幀更新玩家位置、視野框與全體 AI 點位
    * @param playerTank 玩家坦克實體
    * @param alpha 插值係數
    * @param camera 當前相機（已完成當幀 update）
+   * @param allTanks 全體活動坦克列表
    */
-  public update(playerTank: Tank, alpha: number, camera: Camera): void {
+  public update(
+    playerTank: Tank,
+    alpha: number,
+    camera: Camera,
+    allTanks?: Tank[],
+  ): void {
     const mapSize = this.mapSize;
 
     // 1. 繪製相機視野框（使用當幀最新相機可視邊界）
@@ -97,7 +103,27 @@ export class MiniMap {
       .rect(pMin.x, pMin.y, vpW, vpH)
       .stroke({ color: MINIMAP_VIEWPORT_COLOR, width: 1.2, alpha: 0.7 });
 
-    // 2. 繪製玩家所在點 (藍色圓點，使用插值渲染位置)
+    // 2. 繪製全體活動 AI 點位
+    this.aiGraphics.clear();
+    if (allTanks) {
+      const len = allTanks.length;
+      for (let i = 0; i < len; i++) {
+        const t = allTanks[i];
+        if (t.active && t.isAi) {
+          getRenderPosition(t, alpha, this.tempPlayerPos);
+          const pBot = worldToMinimap(
+            this.tempPlayerPos.x,
+            this.tempPlayerPos.y,
+            mapSize,
+          );
+          this.aiGraphics
+            .circle(pBot.x, pBot.y, 1.8)
+            .fill({ color: t.color || 0xf14e54 });
+        }
+      }
+    }
+
+    // 3. 繪製玩家所在點 (藍色圓點，使用插值渲染位置)
     getRenderPosition(playerTank, alpha, this.tempPlayerPos);
     const pPlayer = worldToMinimap(
       this.tempPlayerPos.x,
@@ -106,7 +132,7 @@ export class MiniMap {
     );
     this.playerGraphics.clear();
     this.playerGraphics
-      .circle(pPlayer.x, pPlayer.y, 3)
+      .circle(pPlayer.x, pPlayer.y, 3.2)
       .fill({ color: MINIMAP_PLAYER_COLOR });
   }
 

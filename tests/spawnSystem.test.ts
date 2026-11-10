@@ -89,4 +89,19 @@ describe('Milestone 5: SpawnSystem (AI Ecosystem & Tier Scaling)', () => {
     }
     expect(spawnSystem.getActiveAiCount()).toBe(0);
   });
+
+  it('spawns AI tanks away from map center and avoids player position', () => {
+    const spawnSystem = new SpawnSystem();
+    const player = new Tank(1, 2000, 2000); // 玩家在中心 (2000, 2000)
+    spawnSystem.init(player);
+
+    for (let i = 0; i < spawnSystem.aiTanks.length; i++) {
+      const bot = spawnSystem.aiTanks[i];
+      // 確保沒有任何 AI 生成在距離玩家/地圖中心 < 400 範圍內
+      const dx = bot.x - 2000;
+      const dy = bot.y - 2000;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      expect(dist).toBeGreaterThanOrEqual(400);
+    }
+  });
 });

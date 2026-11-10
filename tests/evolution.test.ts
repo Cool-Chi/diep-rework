@@ -260,4 +260,35 @@ describe('Milestone 4a: Evolution & Class Specialization', () => {
 
     panel.destroy();
   });
+
+  it('does not hide player EvolutionPanel when an AI tank dies or changes class', () => {
+    const eventBus = new EventBus();
+    const player = new Tank(1, 100, 100);
+    const aiBot = new Tank(1001, 200, 200);
+    aiBot.isAi = true;
+
+    const leveling = new LevelingSystem(eventBus, [player, aiBot]);
+    const panel = new EvolutionPanel(eventBus);
+    panel.playerTankId = player.id;
+    panel.resize(1.0);
+
+    eventBus.onEvolutionAvailable((tankId, candidates) => {
+      if (tankId === player.id) {
+        panel.show(candidates);
+      }
+    });
+
+    // 玩家升到 Lv 15，彈出進化面板
+    leveling.addScore(player, 787, eventBus);
+    expect(player.level).toBe(15);
+    expect(panel.visible).toBe(true);
+
+    // 模擬 AI 陣亡並 resetTank，廣播 emitClassChanged(aiBot.id, 'basic')
+    leveling.resetTank(aiBot, eventBus);
+
+    // 玩家的進化面板依然穩定顯示！
+    expect(panel.visible).toBe(true);
+
+    panel.destroy();
+  });
 });

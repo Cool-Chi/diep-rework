@@ -1,3 +1,4 @@
+import { applyAiBuild } from '../ai/aiTactics';
 import { KILL_REWARD_RATIO } from '../config/constants';
 import { levelForScore, pointsForLevel } from '../config/levels.config';
 import { MAX_STAT_POINTS, TOTAL_STATS } from '../config/stats.config';
@@ -102,6 +103,9 @@ export class LevelingSystem {
       tank.level = newLevel;
       if (pointDelta > 0) {
         tank.statPoints += pointDelta;
+        if (tank.isAi) {
+          applyAiBuild(tank);
+        }
       }
 
       recomputeDerivedStats(tank);
@@ -121,7 +125,15 @@ export class LevelingSystem {
       (tank.definition.tier === 1 && tank.level >= 15) ||
       (tank.definition.tier === 2 && tank.level >= 30)
     ) {
-      eventBus?.emitEvolutionAvailable(tank.id, tank.definition.evolutions);
+      if (tank.isAi) {
+        // AI 坦克達標時自動隨機轉職對應階層職業
+        const cands = tank.definition.evolutions;
+        const picked = cands[Math.floor(Math.random() * cands.length)];
+        this.evolveTank(tank, picked, eventBus);
+      } else {
+        // 僅對玩家發布轉職卡牌彈出事件
+        eventBus?.emitEvolutionAvailable(tank.id, tank.definition.evolutions);
+      }
     }
   }
 

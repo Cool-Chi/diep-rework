@@ -216,7 +216,7 @@ export class DebugOverlay {
         Pressed Keys: <b style="color:#ffff00">${pressedStr}</b>
       </div>
       <div>Shapes Destroyed: <b>${this.shapeDestroyedCount}</b> | Tank Deaths: <b>${this.tankDiedCount}</b></div>
-      <div>God Mode: <b style="color:${this.isGodMode ? '#00ff88' : '#ff5555'}">${this.isGodMode ? 'ON' : 'OFF'}</b></div>
+      <div>God Mode: <b style="color:${this.isGodMode ? '#00ff88' : '#ff5555'}">${this.isGodMode ? 'ON' : 'OFF'}</b> | God View: <b style="color:${this.game.camera.isGodView ? '#00ff88' : '#888888'}">${this.game.camera.isGodView ? 'ON' : 'OFF'}</b></div>
     `;
   }
 
@@ -530,6 +530,17 @@ export class DebugOverlay {
     btnContainer.appendChild(stressBtn);
 
     // AI 測試與調參控制按鈕組
+    const toggleGodViewBtn = createBtn(
+      'Toggle God View (Full Map)',
+      () => {
+        this.game.toggleGodView();
+        this.renderMetrics();
+      },
+      '#d9534f',
+    );
+    toggleGodViewBtn.style.gridColumn = 'span 2';
+    btnContainer.appendChild(toggleGodViewBtn);
+
     const toggleAiPassiveBtn = createBtn(
       'Toggle AI Passive',
       () => {

@@ -277,4 +277,63 @@ describe('Combat and Collision System (M2)', () => {
     expect(pentagons).toBeGreaterThan(15);
     expect(pentagons).toBeLessThan(75);
   });
+
+  it('handles tank vs tank collision push-back and mutual body damage', () => {
+    const shapeSystem = new ShapeSystem();
+    const collisionSystem = new CollisionSystem();
+    const eventBus = new EventBus();
+    const bulletPool = new ObjectPool<Bullet>(16, () => new Bullet());
+
+    const tankA = new Tank(1, 500, 500);
+    tankA.hp = 50;
+    tankA.bodyDamageToTank = 30;
+
+    const tankB = new Tank(2, 530, 500); // 距離 30 < 半徑和 50
+    tankB.isAi = true;
+    tankB.hp = 50;
+    tankB.bodyDamageToTank = 25;
+
+    let killedVictim = -1;
+    let killedBy = -1;
+    eventBus.onTankDied((victimId, killerId) => {
+      killedVictim = victimId;
+      killedBy = killerId ?? -1;
+    });
+
+    // 第一次撞擊
+    collisionSystem.update(
+      [tankA, tankB],
+      bulletPool,
+      shapeSystem.shapes,
+      shapeSystem,
+      eventBus,
+      1,
+    );
+
+    // 驗證推開：兩坦克 X 軸距離增大
+    expect(tankB.x - tankA.x).toBeGreaterThan(30);
+
+    // 驗證雙向撞擊傷害
+    expect(tankA.hp).toBe(50 - 25); // 25
+    expect(tankB.hp).toBe(50 - 30); // 20
+    expect(killedVictim).toBe(-1);
+
+    // 第二次撞擊 (tankB HP=20 受到 30 傷害陣亡)
+    // 將兩坦克放回重疊位置
+    tankA.x = 500;
+    tankB.x = 530;
+    collisionSystem.update(
+      [tankA, tankB],
+      bulletPool,
+      shapeSystem.shapes,
+      shapeSystem,
+      eventBus,
+      2,
+    );
+
+    expect(tankB.hp).toBeLessThanOrEqual(0);
+    expect(tankB.active).toBe(false);
+    expect(killedVictim).toBe(tankB.id);
+    expect(killedBy).toBe(tankA.id);
+  });
 });
