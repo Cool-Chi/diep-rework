@@ -1,4 +1,4 @@
-import { Container, Culler, Graphics, Sprite, type Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, type Texture } from 'pixi.js';
 import {
   COLOR_PENTAGON,
   COLOR_SQUARE,
@@ -12,16 +12,18 @@ import {
 } from '../config/constants';
 import type { VisibleBounds } from '../core/Camera';
 import type { Shape, ShapeType } from '../entities/Shape';
+import { isInBounds } from './culling';
 import type { Renderer } from './Renderer';
 
 /**
  * 幾何形狀圖形渲染器
- * 使用預先烘培的共用 Texture（方塊、三角、五邊形）與固定預配 Sprite 物件池（零 GC），支援視錐剔除與 Pixi v8 Culler
+ * 使用預先烘培的共用 Texture（方塊、三角、五邊形）與固定預配 Sprite 物件池（零 GC），支援手動邊界視錐剔除
  */
 export class ShapeRenderer {
   public readonly container = new Container();
   private readonly sprites: Sprite[] = [];
   private textures: Record<ShapeType, Texture> | null = null;
+  public visibleCount = 0;
 
   /**
    * 初始化多邊形貼圖與預配置 Sprite 物件池
@@ -75,19 +77,18 @@ export class ShapeRenderer {
       pentagon: pentTex,
     };
 
-    // 4. 預先配置固定容量的 Sprite
+    // 4. 預先配置固定容量的 Sprite (不啟用 cullable)
     for (let i = 0; i < SHAPE_CAPACITY; i++) {
       const sprite = new Sprite(squareTex);
       sprite.anchor.set(0.5, 0.5);
       sprite.visible = false;
-      sprite.cullable = true;
       this.sprites.push(sprite);
       this.container.addChild(sprite);
     }
   }
 
   /**
-   * 每個渲染幀更新形狀插值顯示位置、自轉角度與可視範圍裁切
+   * 每個渲染幀更新形狀插值顯示位置、自轉角度與手動可視範圍裁切
    */
   public update(
     shapes: Shape[],
@@ -97,10 +98,8 @@ export class ShapeRenderer {
     if (!this.textures) return;
 
     const count = shapes.length;
-    const minX = visibleBounds.minX - 60;
-    const maxX = visibleBounds.maxX + 60;
-    const minY = visibleBounds.minY - 60;
-    const maxY = visibleBounds.maxY + 60;
+    let visibleCounter = 0;
+    const margin = 60;
 
     for (let i = 0; i < count; i++) {
       const sprite = this.sprites[i];
@@ -114,8 +113,8 @@ export class ShapeRenderer {
       const rx = shape.prevX + (shape.x - shape.prevX) * alpha;
       const ry = shape.prevY + (shape.y - shape.prevY) * alpha;
 
-      // 視錐裁切
-      if (rx < minX || rx > maxX || ry < minY || ry > maxY) {
+      // 手動邊界裁切（考慮 margin）
+      if (!isInBounds(rx, ry, shape.radius, visibleBounds, margin)) {
         if (sprite.visible) sprite.visible = false;
         continue;
       }
@@ -124,6 +123,7 @@ export class ShapeRenderer {
       sprite.x = rx;
       sprite.y = ry;
       sprite.rotation = shape.rotation;
+      visibleCounter++;
 
       const targetTex = this.textures[shape.kind];
       if (sprite.texture !== targetTex) {
@@ -131,13 +131,7 @@ export class ShapeRenderer {
       }
     }
 
-    // 觸發 Pixi v8 Culler
-    Culler.shared.cull(this.container, {
-      x: visibleBounds.minX,
-      y: visibleBounds.minY,
-      width: visibleBounds.width,
-      height: visibleBounds.height,
-    });
+    this.visibleCount = visibleCounter;
   }
 
   public destroy(): void {

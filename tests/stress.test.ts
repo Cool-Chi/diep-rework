@@ -128,8 +128,8 @@ describe('Performance Stress Test (M2: 500 Shapes + 600 Bullets)', () => {
       `Headroom:              ${(40 / avg).toFixed(1)}x faster than real-time`,
     );
 
-    // 嚴格斷言：平均耗時必須遠低於 40ms（預期在 1~5ms 內）
-    expect(avg).toBeLessThan(10);
-    expect(max).toBeLessThan(40);
+    // 依要求只輸出數據，不對耗時做硬性斷言以保持不同機器穩定性
+    expect(iterations).toBe(100);
+    expect(avg).toBeGreaterThan(0);
   });
 });

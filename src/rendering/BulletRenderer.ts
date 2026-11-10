@@ -1,4 +1,4 @@
-import { Container, Culler, Graphics, Sprite, type Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, type Texture } from 'pixi.js';
 import {
   BASE_BULLET_RADIUS,
   BULLET_POOL_CAPACITY,
@@ -9,16 +9,18 @@ import {
 import type { VisibleBounds } from '../core/Camera';
 import type { ObjectPool } from '../core/ObjectPool';
 import type { Bullet } from '../entities/Bullet';
+import { isInBounds } from './culling';
 import type { Renderer } from './Renderer';
 
 /**
  * 子彈圖形渲染器
- * 使用預先烘培的共用 Texture 與固定預配 Sprite 物件池（零 GC），支援視錐剔除與 Pixi v8 Culler
+ * 使用預先烘培的共用 Texture 與固定預配 Sprite 物件池（零 GC），支援手動邊界視錐剔除
  */
 export class BulletRenderer {
   public readonly container = new Container();
   private readonly sprites: Sprite[] = [];
   private bulletTexture: Texture | null = null;
+  public visibleCount = 0;
 
   /**
    * 初始化子彈貼圖與預配置 Sprite 物件池
@@ -32,19 +34,18 @@ export class BulletRenderer {
     this.bulletTexture = renderer.app.renderer.generateTexture({ target: g });
     g.destroy();
 
-    // 2. 預先配置固定容量的 Sprite
+    // 2. 預先配置固定容量的 Sprite (不啟用 cullable)
     for (let i = 0; i < BULLET_POOL_CAPACITY; i++) {
       const sprite = new Sprite(this.bulletTexture);
       sprite.anchor.set(0.5, 0.5);
       sprite.visible = false;
-      sprite.cullable = true;
       this.sprites.push(sprite);
       this.container.addChild(sprite);
     }
   }
 
   /**
-   * 每個渲染幀更新子彈插值顯示位置與可視範圍裁切
+   * 每個渲染幀更新子彈插值顯示位置與手動可視範圍裁切
    */
   public update(
     bulletPool: ObjectPool<Bullet>,
@@ -52,10 +53,8 @@ export class BulletRenderer {
     visibleBounds: VisibleBounds,
   ): void {
     const cap = bulletPool.capacity;
-    const minX = visibleBounds.minX - 50;
-    const maxX = visibleBounds.maxX + 50;
-    const minY = visibleBounds.minY - 50;
-    const maxY = visibleBounds.maxY + 50;
+    let visibleCounter = 0;
+    const margin = 50;
 
     for (let i = 0; i < cap; i++) {
       const sprite = this.sprites[i];
@@ -68,8 +67,8 @@ export class BulletRenderer {
       const rx = bullet.prevX + (bullet.x - bullet.prevX) * alpha;
       const ry = bullet.prevY + (bullet.y - bullet.prevY) * alpha;
 
-      // 視錐邊界剔除
-      if (rx < minX || rx > maxX || ry < minY || ry > maxY) {
+      // 手動邊界裁切（考慮 margin 避免邊緣閃爍）
+      if (!isInBounds(rx, ry, bullet.radius, visibleBounds, margin)) {
         if (sprite.visible) sprite.visible = false;
         continue;
       }
@@ -77,15 +76,10 @@ export class BulletRenderer {
       sprite.visible = true;
       sprite.x = rx;
       sprite.y = ry;
+      visibleCounter++;
     }
 
-    // 觸發 Pixi v8 Culler
-    Culler.shared.cull(this.container, {
-      x: visibleBounds.minX,
-      y: visibleBounds.minY,
-      width: visibleBounds.width,
-      height: visibleBounds.height,
-    });
+    this.visibleCount = visibleCounter;
   }
 
   public destroy(): void {
