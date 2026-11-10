@@ -77,9 +77,9 @@
    │   ├── ShapeContainer
    │   ├── BulletContainer
    │   ├── TankContainer
+   │   ├── HealthBarLayer (置於坦克與形狀之上)
    │   └── ParticleContainer (Pixi v8 ParticleContainer)
    └── HUDContainer (固定螢幕像素座標，不受相機縮放影響)
-       ├── HealthBars
        ├── StatUpgradePanel
        ├── ScoreBar (含 BitmapText)
        ├── MiniMap

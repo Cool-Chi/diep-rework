@@ -346,15 +346,16 @@ diep-rework/
 │   │   ├── TankRenderer.ts         # 圓形底盤、動態多砲管（含喇叭口 tipWidth）與後座力動畫
 │   │   ├── BulletRenderer.ts       # 共用貼圖 Sprite 批次渲染子彈
 │   │   ├── ShapeRenderer.ts        # 共用貼圖 Sprite 渲染多邊形與受擊閃白
+│   │   ├── HealthBarRenderer.ts    # 世界座標實體動態血條（HealthBarLayer，置於坦克與形狀之上）
+│   │   ├── getRenderPosition.ts    # 實體插值世界座標與血條錨點計算
 │   │   ├── GridRenderer.ts         # 背景淡灰網格（1 格 = 25 單位）與世界邊界繪製
 │   │   └── ParticleRenderer.ts     # Pixi v8 ParticleContainer 擊碎粒子特效
 │   ├── ui/                         # 純 Pixi.js v8 Canvas HUD
 │   │   ├── HUD.ts                  # HUD 根容器
 │   │   ├── StatUpgradePanel.ts     # 1~8 屬性升級按鈕條與剩餘點數
 │   │   ├── EvolutionPanel.ts       # 轉職卡牌彈窗（僅當候選職業 > 1 時顯示）與自動進化提示
-│   │   ├── HealthBar.ts            # 實體下方動態血條
 │   │   ├── ScoreBar.ts             # 底部經驗條、等級與 BitmapText 分數顯示
-│   │   ├── MiniMap.ts              # 右上角小地圖與邊界雷達
+│   │   ├── MiniMap.ts              # 右下角小地圖與邊界雷達
 │   │   ├── Leaderboard.ts          # 右上角積分排行榜
 │   │   └── GameOverModal.ts        # 死亡結算面板與重新開始按鈕
 │   └── debug/                      # 開發與驗收工具（僅在 import.meta.env.DEV 下動態載入）
@@ -450,7 +451,7 @@ flowchart LR
 
 ### Milestone 3b (M3b): 純 Pixi HUD 與小地圖
 - **內容**：
-  - 實作 `HUD` 容器：實體動態 `HealthBar`、底部 `ScoreBar`（等級、經驗進度條、`BitmapText` 分數）。
+  - 實作 `HUD` 容器：底部 `ScoreBar`（等級、經驗進度條、分數顯示）、左下方 `StatUpgradePanel`、右下角 `MiniMap`；世界層 `HealthBarLayer` 動態血條（跟隨實體插值世界座標）。
   - 實作左下方 `StatUpgradePanel`（8 項屬性升級長條 UI，支援滑鼠點擊與 `Digit1` ~ `Digit8` 快捷加點）。
   - 實作右上角 `MiniMap`（顯示 4000x4000 邊界與玩家自身位置點）與 `Leaderboard`。
 - **完成條件**：`npm run typecheck`、`npm test`、`npm run lint` 全數通過，且更新 `DebugOverlay` 對應功能。
