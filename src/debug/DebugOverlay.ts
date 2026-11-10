@@ -4,7 +4,7 @@ import type { Game } from '../core/Game';
 /**
  * 完整開發除錯面板 (DebugOverlay)
  * 僅在 import.meta.env.DEV 環境動態載入，按 Backquote (`) 開啟/關閉
- * 採用純 DOM 實作，事件嚴格隔離，具備效能指標、壓力測試與常數即時微調
+ * 採用純 DOM 實作，事件嚴格隔離，具備效能指標、渲染耗時、壓力測試與常數即時微調
  */
 export class DebugOverlay {
   private element: HTMLDivElement | null = null;
@@ -23,6 +23,12 @@ export class DebugOverlay {
   private tickRingHead = 0;
   private avgTickMs = 0;
   private maxTickMs = 0;
+
+  // Render 耗時統計（預先配置 50 容量環形緩衝區，熱路徑零配置）
+  private readonly renderDurations = new Float64Array(50);
+  private renderRingHead = 0;
+  private avgRenderMs = 0;
+  private maxRenderMs = 0;
 
   // 事件計數器
   private shapeDestroyedCount = 0;
@@ -56,6 +62,8 @@ export class DebugOverlay {
 
   public toggleVisibility(): void {
     this.isVisible = !this.isVisible;
+    // 開關切換時主動清空按鍵，防止卡鍵
+    this.game.inputManager.clearKeys();
     if (this.element) {
       this.element.style.display = this.isVisible ? 'block' : 'none';
     }
@@ -69,6 +77,15 @@ export class DebugOverlay {
     this.tickCount++;
     this.tickDurations[this.tickRingHead] = durationMs;
     this.tickRingHead = (this.tickRingHead + 1) % 50;
+  }
+
+  /**
+   * 每個渲染幀更新 Sprite 渲染時間
+   * @param durationMs 該幀 Sprite 渲染更新耗時毫秒數
+   */
+  public recordRenderDuration(durationMs: number): void {
+    this.renderDurations[this.renderRingHead] = durationMs;
+    this.renderRingHead = (this.renderRingHead + 1) % 50;
   }
 
   /**
@@ -91,15 +108,26 @@ export class DebugOverlay {
       this.lastFpsTime = now;
 
       // 計算環形緩衝之平均與最大 tick 耗時
-      let sum = 0;
-      let max = 0;
+      let tickSum = 0;
+      let tickMax = 0;
       for (let i = 0; i < 50; i++) {
         const val = this.tickDurations[i];
-        sum += val;
-        if (val > max) max = val;
+        tickSum += val;
+        if (val > tickMax) tickMax = val;
       }
-      this.avgTickMs = sum / 50;
-      this.maxTickMs = max;
+      this.avgTickMs = tickSum / 50;
+      this.maxTickMs = tickMax;
+
+      // 計算環形緩衝之平均與最大 render 耗時
+      let renderSum = 0;
+      let renderMax = 0;
+      for (let i = 0; i < 50; i++) {
+        const val = this.renderDurations[i];
+        renderSum += val;
+        if (val > renderMax) renderMax = val;
+      }
+      this.avgRenderMs = renderSum / 50;
+      this.maxRenderMs = renderMax;
 
       this.renderMetrics();
     }
@@ -110,17 +138,26 @@ export class DebugOverlay {
 
     const tank = this.game.playerTank;
     const activeBullets = this.game.bulletPool.getActiveCount();
+    const visibleBullets = this.game.bulletRenderer.visibleCount;
+    const bulletAlert = activeBullets > 0 && visibleBullets === 0;
+
     const activeShapes = this.game.shapeSystem.activeCount;
+    const visibleShapes = this.game.shapeRenderer.visibleCount;
+    const shapeAlert = activeShapes > 0 && visibleShapes === 0;
+
+    const pressedKeys = this.game.inputManager.getPressedKeys();
+    const pressedStr = pressedKeys.length > 0 ? pressedKeys.join(', ') : 'none';
 
     this.metricsElement.innerHTML = `
       <div style="font-weight:bold;color:#00ffcc;margin-bottom:6px;">[DEBUG PANEL] (Toggle: \`)</div>
       <div>FPS: <b>${this.currentFps}</b> | TPS: <b>${this.currentTps}</b> (target 25)</div>
       <div>Tick Duration: avg <b>${this.avgTickMs.toFixed(2)}ms</b> | max <b>${this.maxTickMs.toFixed(2)}ms</b></div>
-      <div>Active Shapes: <b>${activeShapes}</b> / 500</div>
-      <div>Active Bullets: <b>${activeBullets}</b> / 1024</div>
+      <div>Render Duration: avg <b>${this.avgRenderMs.toFixed(2)}ms</b> | max <b>${this.maxRenderMs.toFixed(2)}ms</b></div>
+      <div>Bullets: ${bulletAlert ? `<b style="color:#ff3333">${activeBullets} active / ${visibleBullets} visible [ALERT: INVISIBLE!]</b>` : `<b>${activeBullets}</b> active / <b>${visibleBullets}</b> visible`}</div>
+      <div>Shapes: ${shapeAlert ? `<b style="color:#ff3333">${activeShapes} active / ${visibleShapes} visible [ALERT: INVISIBLE!]</b>` : `<b>${activeShapes}</b> active / <b>${visibleShapes}</b> visible`}</div>
       <div>Tank HP: <b>${Math.ceil(tank.hp)}</b> / ${tank.maxHp}</div>
-      <div>Shapes Destroyed: <b>${this.shapeDestroyedCount}</b></div>
-      <div>Tank Deaths: <b>${this.tankDiedCount}</b></div>
+      <div>Pressed Keys: <b style="color:#ffff00">${pressedStr}</b></div>
+      <div>Shapes Destroyed: <b>${this.shapeDestroyedCount}</b> | Tank Deaths: <b>${this.tankDiedCount}</b></div>
       <div>God Mode: <b style="color:${this.isGodMode ? '#00ff88' : '#ff5555'}">${this.isGodMode ? 'ON' : 'OFF'}</b></div>
     `;
   }
@@ -144,13 +181,11 @@ export class DebugOverlay {
     el.style.userSelect = 'none';
     el.style.maxWidth = '360px';
 
-    // 關鍵：阻止滑鼠與鍵盤事件傳遞至 Canvas，避免點擊面板誤開火
+    // 關鍵：只阻擋滑鼠與 pointer 事件傳給遊戲，不阻擋鍵盤事件（確保 keyup 永遠能被接收）
     const stopPropagation = (e: Event) => e.stopPropagation();
     el.addEventListener('pointerdown', stopPropagation);
     el.addEventListener('mousedown', stopPropagation);
     el.addEventListener('click', stopPropagation);
-    el.addEventListener('keydown', stopPropagation);
-    el.addEventListener('keyup', stopPropagation);
 
     // 1. 數值指標區
     this.metricsElement = document.createElement('div');
@@ -184,7 +219,11 @@ export class DebugOverlay {
       b.style.cursor = 'pointer';
       b.style.fontSize = '11px';
       b.style.fontFamily = 'inherit';
-      b.addEventListener('click', onClick);
+      b.addEventListener('click', () => {
+        onClick();
+        b.blur();
+        this.game.renderer.app.canvas.focus?.();
+      });
       return b;
     };
 
@@ -273,6 +312,14 @@ export class DebugOverlay {
         setValue(val);
         labelSpan.textContent = `${label}: ${val.toFixed(2)}`;
       });
+
+      // 操作結束後失焦，把焦點還給遊戲 canvas
+      const returnFocus = () => {
+        input.blur();
+        this.game.renderer.app.canvas.focus?.();
+      };
+      input.addEventListener('change', returnFocus);
+      input.addEventListener('pointerup', returnFocus);
 
       row.appendChild(labelSpan);
       row.appendChild(input);

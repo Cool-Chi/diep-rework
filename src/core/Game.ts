@@ -180,9 +180,11 @@ export class Game {
     const aimAngle = Math.atan2(mouseWorld.y - renderY, mouseWorld.x - renderX);
 
     // 更新各圖層渲染對象
+    const renderStartTime = performance.now();
     this.tankRenderer.update(renderX, renderY, aimAngle);
     this.shapeRenderer.update(this.shapeSystem.shapes, alpha, visibleBounds);
     this.bulletRenderer.update(this.bulletPool, alpha, visibleBounds);
+    const renderDuration = performance.now() - renderStartTime;
 
     // 相機平滑跟隨坦克插值位置
     this.camera.setTarget(renderX, renderY);
@@ -191,6 +193,7 @@ export class Game {
 
     // 更新除錯面板指標
     if (this.debugOverlay) {
+      this.debugOverlay.recordRenderDuration(renderDuration);
       this.debugOverlay.update();
     }
   }
