@@ -3,6 +3,7 @@ import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config/constants';
+import { sizeFactor } from '../config/stats.config';
 import type { DebugOverlay } from '../debug/DebugOverlay';
 import { Bullet } from '../entities/Bullet';
 import { Tank } from '../entities/Tank';
@@ -14,6 +15,8 @@ import { ShapeRenderer } from '../rendering/ShapeRenderer';
 import { TankRenderer } from '../rendering/TankRenderer';
 import { CollisionSystem } from '../systems/CollisionSystem';
 import { FireSystem } from '../systems/FireSystem';
+import { LevelingSystem } from '../systems/LevelingSystem';
+import { RegenSystem } from '../systems/RegenSystem';
 import { ShapeSystem } from '../systems/ShapeSystem';
 import { Camera } from './Camera';
 import { EventBus } from './EventBus';
@@ -48,6 +51,11 @@ export class Game {
   public readonly fireSystem = new FireSystem();
   public readonly shapeSystem = new ShapeSystem();
   public readonly collisionSystem = new CollisionSystem();
+  public readonly levelingSystem: LevelingSystem;
+  public readonly regenSystem = new RegenSystem();
+
+  // 模擬 tick 計數
+  public currentTick = 0;
 
   // 渲染層
   public readonly gridRenderer = new GridRenderer();
@@ -60,6 +68,16 @@ export class Game {
   private onResizeBound: () => void;
 
   constructor() {
+    this.levelingSystem = new LevelingSystem(this.eventBus, [this.playerTank]);
+    this.inputManager.eventBus = this.eventBus;
+    this.eventBus.onStatUpgradeRequested((statIndex) => {
+      this.levelingSystem.spendStatPoint(
+        this.playerTank,
+        statIndex,
+        this.eventBus,
+      );
+    });
+
     this.loop = new GameLoop(this.update.bind(this));
     this.onResizeBound = this.handleResize.bind(this);
   }
@@ -119,6 +137,7 @@ export class Game {
     // --- 固定步長物理模擬階段 (25 TPS) ---
     for (let i = 0; i < stepResult.ticks; i++) {
       const tickStart = performance.now();
+      this.currentTick++;
 
       // (a) 取樣輸入寫入坦克 InputCommand
       this.inputManager.sample(this.playerTank.input, (sx, sy) =>
@@ -150,11 +169,15 @@ export class Game {
         this.shapeSystem.shapes,
         this.shapeSystem,
         this.eventBus,
+        this.currentTick,
       );
+
+      // (g) 自然生命恢復與 30 秒加速回血
+      this.regenSystem.update([this.playerTank], this.currentTick);
 
       const tickDuration = performance.now() - tickStart;
 
-      // (g) 記錄實際 TPS 頻率與耗時
+      // (h) 記錄實際 TPS 頻率與耗時
       if (this.debugOverlay) {
         this.debugOverlay.recordTick(tickDuration);
       }
@@ -179,14 +202,20 @@ export class Game {
     );
     const aimAngle = Math.atan2(mouseWorld.y - renderY, mouseWorld.x - renderX);
 
-    // 更新各圖層渲染對象
+    // 更新各圖層渲染對象（坦克底盤與砲管隨等級 sizeFactor 放大）
     const renderStartTime = performance.now();
-    this.tankRenderer.update(renderX, renderY, aimAngle);
+    this.tankRenderer.update(
+      renderX,
+      renderY,
+      aimAngle,
+      sizeFactor(this.playerTank.level),
+    );
     this.shapeRenderer.update(this.shapeSystem.shapes, alpha, visibleBounds);
     this.bulletRenderer.update(this.bulletPool, alpha, visibleBounds);
     const renderDuration = performance.now() - renderStartTime;
 
-    // 相機平滑跟隨坦克插值位置
+    // 相機平滑跟隨坦克插值位置（含等級視野縮放）
+    this.camera.targetLevel = this.playerTank.level;
     this.camera.setTarget(renderX, renderY);
     this.camera.update(dtSeconds);
     this.renderer.updateCamera(this.camera);

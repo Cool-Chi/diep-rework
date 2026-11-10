@@ -1,4 +1,8 @@
-import { CAMERA_BASE_SCALE, CAMERA_SMOOTH_K } from '../config/constants';
+import {
+  CAMERA_BASE_SCALE,
+  CAMERA_SMOOTH_K,
+  FOV_LEVEL_SCALING,
+} from '../config/constants';
 
 export interface VisibleBounds {
   minX: number;
@@ -28,6 +32,7 @@ export class Camera {
   public screenHeight = 600;
 
   public fovMultiplier = 1.0;
+  public targetLevel = 1;
   public baseScale: number = CAMERA_BASE_SCALE;
   public smoothK: number = CAMERA_SMOOTH_K;
 
@@ -53,10 +58,11 @@ export class Camera {
 
   /**
    * 當前整體渲染縮放比例
-   * 縮放 = CAMERA_BASE_SCALE ÷ fovMultiplier
+   * 縮放 = CAMERA_BASE_SCALE ÷ (fovMultiplier * 等級視野放大率)
    */
   public get scale(): number {
-    return this.baseScale / this.fovMultiplier;
+    const levelFactor = 1 + (this.targetLevel - 1) * FOV_LEVEL_SCALING;
+    return this.baseScale / (this.fovMultiplier * levelFactor);
   }
 
   /**

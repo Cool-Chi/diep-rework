@@ -183,4 +183,27 @@ describe('InputManager (Robust keyup & focus loss handling)', () => {
     mockWindow.dispatchEvent(new MockKeyboardEvent('keyup', 'KeyS'));
     expect(input.getPressedKeys()).not.toContain('KeyS');
   });
+
+  it('triggers stat upgrade requests on Digit1 ~ Digit8 keys without repeats', () => {
+    const mockWindow = new EventTarget();
+    const mockCanvas = new EventTarget() as HTMLCanvasElement;
+    const input = new InputManager(mockWindow, null);
+    input.attach(mockCanvas);
+
+    const upgrades: number[] = [];
+    const mockEventBus = {
+      emitStatUpgradeRequested: (idx: number) => {
+        upgrades.push(idx);
+      },
+    };
+    input.eventBus = mockEventBus as unknown as typeof input.eventBus;
+
+    // 按下 1 號鍵 (生命恢復)
+    mockWindow.dispatchEvent(new MockKeyboardEvent('keydown', 'Digit1'));
+    expect(upgrades).toEqual([0]);
+
+    // 按下 8 號鍵 (移動速度)
+    mockWindow.dispatchEvent(new MockKeyboardEvent('keydown', 'Digit8'));
+    expect(upgrades).toEqual([0, 7]);
+  });
 });

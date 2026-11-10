@@ -39,13 +39,20 @@ export class TankRenderer {
   }
 
   /**
-   * 渲染幀更新顯示位置與砲管朝向
+   * 渲染幀更新顯示位置、砲管朝向與體型縮放
    * @param renderX 插值後的坦克世界 X 座標
    * @param renderY 插值後的坦克世界 Y 座標
    * @param aimAngle 本渲染幀滑鼠相對於坦克的角度（弧度）
+   * @param scale 坦克體型縮放倍率（預設 1.0）
    */
-  public update(renderX: number, renderY: number, aimAngle: number): void {
+  public update(
+    renderX: number,
+    renderY: number,
+    aimAngle: number,
+    scale = 1.0,
+  ): void {
     this.container.position.set(renderX, renderY);
+    this.container.scale.set(scale, scale);
     this.barrelContainer.rotation = aimAngle;
   }
 

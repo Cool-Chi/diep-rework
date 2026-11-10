@@ -41,6 +41,7 @@ export class CollisionSystem {
     shapes: Shape[],
     shapeSystem: ShapeSystem,
     eventBus: EventBus,
+    currentTick = 0,
   ): void {
     // 1. 重建空間雜湊網格 (SpatialHash)
     this.spatialHash.clear();
@@ -178,8 +179,9 @@ export class CollisionSystem {
             }
 
             targetTank.hp -= damageDealt;
+            targetTank.lastDamageTick = currentTick;
             if (targetTank.hp <= 0) {
-              eventBus.emitTankDied(targetTank.id);
+              eventBus.emitTankDied(targetTank.id, bullet.ownerId);
               targetTank.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
             }
           }
@@ -254,6 +256,7 @@ export class CollisionSystem {
 
           shape.hp -= damageToShape;
           tank.hp -= damageToTank;
+          tank.lastDamageTick = currentTick;
 
           if (shape.hp <= 0) {
             shape.active = false;
@@ -262,7 +265,7 @@ export class CollisionSystem {
           }
 
           if (tank.hp <= 0) {
-            eventBus.emitTankDied(tank.id);
+            eventBus.emitTankDied(tank.id, -1);
             tank.respawn(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
           }
         }

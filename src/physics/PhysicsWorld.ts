@@ -54,8 +54,9 @@ export class PhysicsWorld {
     }
 
     // 3. 加速度與速度阻尼積分：v_{t+1} = (v_t + a) * DAMPING
-    tank.vx = (tank.vx + mx * this.moveAccel) * this.damping;
-    tank.vy = (tank.vy + my * this.moveAccel) * this.damping;
+    const effectiveAccel = this.moveAccel * tank.moveAccelScale;
+    tank.vx = (tank.vx + mx * effectiveAccel) * this.damping;
+    tank.vy = (tank.vy + my * effectiveAccel) * this.damping;
 
     // 防止浮點極微小震盪
     if (Math.abs(tank.vx) < 0.0001) tank.vx = 0;

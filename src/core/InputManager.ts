@@ -1,4 +1,5 @@
 import type { InputCommand } from '../entities/Tank';
+import type { EventBus } from './EventBus';
 
 /**
  * 玩家鍵鼠輸入管理器
@@ -7,6 +8,8 @@ import type { InputCommand } from '../entities/Tank';
  * 視窗失焦、切換分頁、pointercancel、contextmenu、overlay 切換時皆清空按鍵
  */
 export class InputManager {
+  public eventBus: EventBus | null = null;
+
   private keyW = false;
   private keyA = false;
   private keyS = false;
@@ -180,6 +183,30 @@ export class InputManager {
         break;
       case 'KeyE':
         this.autoFire = !this.autoFire;
+        break;
+      case 'Digit1':
+        if (!e.repeat) this.eventBus?.emitStatUpgradeRequested(0);
+        break;
+      case 'Digit2':
+        if (!e.repeat) this.eventBus?.emitStatUpgradeRequested(1);
+        break;
+      case 'Digit3':
+        if (!e.repeat) this.eventBus?.emitStatUpgradeRequested(2);
+        break;
+      case 'Digit4':
+        if (!e.repeat) this.eventBus?.emitStatUpgradeRequested(3);
+        break;
+      case 'Digit5':
+        if (!e.repeat) this.eventBus?.emitStatUpgradeRequested(4);
+        break;
+      case 'Digit6':
+        if (!e.repeat) this.eventBus?.emitStatUpgradeRequested(5);
+        break;
+      case 'Digit7':
+        if (!e.repeat) this.eventBus?.emitStatUpgradeRequested(6);
+        break;
+      case 'Digit8':
+        if (!e.repeat) this.eventBus?.emitStatUpgradeRequested(7);
         break;
     }
   }

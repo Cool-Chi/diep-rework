@@ -7,11 +7,7 @@ import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config/constants';
-import {
-  getBulletDamage,
-  getBulletPenetration,
-  getReloadTicks,
-} from '../config/stats.config';
+import { sizeFactor } from '../config/stats.config';
 import type { ObjectPool } from '../core/ObjectPool';
 import type { Bullet } from '../entities/Bullet';
 import type { Tank } from '../entities/Tank';
@@ -28,17 +24,8 @@ export class FireSystem {
    * 每個模擬 tick 更新指定坦克的開火邏輯
    * @param tank 坦克實體
    * @param bulletPool 子彈物件池
-   * @param reloadPoints 裝填屬性加點 (M2 預設 0)
-   * @param bulletPenPoints 子彈穿透加點 (M2 預設 0)
-   * @param bulletDmgPoints 子彈傷害加點 (M2 預設 0)
    */
-  public updateTankFiring(
-    tank: Tank,
-    bulletPool: ObjectPool<Bullet>,
-    reloadPoints = 0,
-    bulletPenPoints = 0,
-    bulletDmgPoints = 0,
-  ): void {
+  public updateTankFiring(tank: Tank, bulletPool: ObjectPool<Bullet>): void {
     if (!tank.active) return;
 
     // 1. 更新瞄準朝向
@@ -60,7 +47,8 @@ export class FireSystem {
 
     // 3. 若有射擊意圖，依序檢查各砲管冷卻並發射
     if (tank.input.shooting) {
-      const reloadTicks = getReloadTicks(reloadPoints);
+      const reloadTicks = tank.reloadTicks;
+      const s = sizeFactor(tank.level);
 
       for (let b = 0; b < barrelCount; b++) {
         if (tank.barrelCooldowns[b] <= 0) {
@@ -72,20 +60,24 @@ export class FireSystem {
             barrel.spread > 0 ? (Math.random() - 0.5) * 2 * barrel.spread : 0;
           const fireAngle = totalAngle + spreadOffset;
 
-          // 計算砲管口世界座標（砲管自安裝偏移點向外延伸 barrel.length）
+          // 計算砲管口世界座標（砲管與安裝點隨坦克體型等比放大）
           const cosBase = Math.cos(tank.rotation);
           const sinBase = Math.sin(tank.rotation);
           // 安裝底座世界座標
           const mountX =
-            tank.x + barrel.offsetX * cosBase - barrel.offsetY * sinBase;
+            tank.x + (barrel.offsetX * cosBase - barrel.offsetY * sinBase) * s;
           const mountY =
-            tank.y + barrel.offsetX * sinBase + barrel.offsetY * cosBase;
+            tank.y + (barrel.offsetX * sinBase + barrel.offsetY * cosBase) * s;
           // 砲口世界座標
-          const tipX = mountX + barrel.length * Math.cos(totalAngle);
-          const tipY = mountY + barrel.length * Math.sin(totalAngle);
+          const tipX = mountX + barrel.length * s * Math.cos(totalAngle);
+          const tipY = mountY + barrel.length * s * Math.sin(totalAngle);
 
-          // 計算子彈初速
-          const speed = this.bulletSpeed * barrel.bulletSpeedMultiplier;
+          // 計算子彈初速 (支援 DebugOverlay 微調覆寫或坦克衍生速度)
+          const baseSpeed =
+            this.bulletSpeed !== BASE_BULLET_SPEED
+              ? this.bulletSpeed
+              : tank.bulletSpeed;
+          const speed = baseSpeed * barrel.bulletSpeedMultiplier;
           const vx =
             Math.cos(fireAngle) * speed +
             tank.vx * BULLET_INHERIT_TANK_VELOCITY;
@@ -93,12 +85,10 @@ export class FireSystem {
             Math.sin(fireAngle) * speed +
             tank.vy * BULLET_INHERIT_TANK_VELOCITY;
 
-          // 子彈屬性
-          const radius = BASE_BULLET_RADIUS * barrel.bulletSizeMultiplier;
-          const hp =
-            getBulletPenetration(bulletPenPoints) * barrel.bulletPenMultiplier;
-          const damage =
-            getBulletDamage(bulletDmgPoints) * barrel.bulletDamageMultiplier;
+          // 子彈屬性（子彈尺寸亦隨等級 sizeFactor 放大）
+          const radius = BASE_BULLET_RADIUS * s * barrel.bulletSizeMultiplier;
+          const hp = tank.bulletHp * barrel.bulletPenMultiplier;
+          const damage = tank.bulletDamage * barrel.bulletDamageMultiplier;
 
           // 從池中借用子彈實體
           const bulletIdx = bulletPool.acquire();
