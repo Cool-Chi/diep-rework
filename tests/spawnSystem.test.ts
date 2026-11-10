@@ -130,4 +130,29 @@ describe('Milestone 5: SpawnSystem (AI Ecosystem & Tier Scaling)', () => {
       expect(count).toBeLessThanOrEqual(14);
     }
   });
+
+  it('spawns Tier 4 AI tanks when player reaches Level 45', () => {
+    const spawnSystem = new SpawnSystem();
+    const player = new Tank(1, 2000, 2000);
+    player.level = 45;
+
+    spawnSystem.init(player);
+
+    const tiers = spawnSystem.aiTanks.map((b) => b.definition.tier);
+    const hasTier4 = tiers.some((t) => t === 4);
+    expect(hasTier4).toBe(true);
+
+    // 強制生成 Annihilator
+    const bot = spawnSystem.aiTanks[0];
+    spawnSystem.spawnAiTank(
+      bot,
+      player.level,
+      player.x,
+      player.y,
+      'annihilator',
+    );
+    expect(bot.definition.id).toBe('annihilator');
+    expect(bot.definition.tier).toBe(4);
+    expect(bot.level).toBe(45);
+  });
 });

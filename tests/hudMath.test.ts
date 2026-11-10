@@ -8,7 +8,7 @@ import {
 import { computeHudLayout } from '../src/ui/layout';
 
 describe('HUD Math and Pure Layout Functions (M3b)', () => {
-  it('scoreProgress correctly calculates percentage to next level and maxes at Lv 30', () => {
+  it('scoreProgress correctly calculates percentage to next level and maxes at Lv 45', () => {
     // Lv 1 門檻 0，Lv 2 門檻 4
     expect(scoreProgress(1, 0)).toBe(0.0);
     expect(scoreProgress(1, 2)).toBe(0.5); // 區間中點
@@ -18,9 +18,9 @@ describe('HUD Math and Pure Layout Functions (M3b)', () => {
     expect(scoreProgress(2, 4)).toBe(0.0); // 剛升級為 0%
     expect(scoreProgress(2, 8.5)).toBeCloseTo(0.5, 5); // 4 + 4.5 = 8.5
 
-    // Lv 30 滿級 (6184 分以上固定滿格 1.0)
-    expect(scoreProgress(30, 6184)).toBe(1.0);
-    expect(scoreProgress(30, 99999)).toBe(1.0);
+    // Lv 45 滿級 (23536 分以上固定滿格 1.0)
+    expect(scoreProgress(45, 23536)).toBe(1.0);
+    expect(scoreProgress(45, 99999)).toBe(1.0);
   });
 
   it('worldToMinimap correctly transforms 4000x4000 world coordinates to minimap space', () => {

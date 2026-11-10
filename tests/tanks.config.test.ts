@@ -76,12 +76,16 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
     expect(rear.length).toBeLessThan(front.length);
   });
 
-  it('verifies all 4 Tier 3 tanks require Level 30 and match evolution hierarchy', () => {
+  it('verifies all 8 Tier 3 tanks require Level 30 and match evolution hierarchy', () => {
     const tier3Ids: TankClassId[] = [
       'triple_shot',
       'assassin',
       'destroyer',
       'twin_flank',
+      'quad_tank',
+      'hunter',
+      'gunner',
+      'tri_angle',
     ];
 
     for (const id of tier3Ids) {
@@ -89,14 +93,68 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
       expect(def).toBeDefined();
       expect(def.tier).toBe(3);
       expect(def.requiredLevel).toBe(30);
-      expect(def.evolutions).toHaveLength(0);
     }
 
+    // 驗證 Tier 3 進化至 Tier 4 之拓撲鏈
+    expect(TANKS_CONFIG.triple_shot.evolutions).toEqual([
+      'triplet',
+      'penta_shot',
+    ]);
+    expect(TANKS_CONFIG.quad_tank.evolutions).toEqual(['octo_tank']);
+    expect(TANKS_CONFIG.assassin.evolutions).toEqual(['ranger']);
+    expect(TANKS_CONFIG.hunter.evolutions).toEqual(['predator']);
+    expect(TANKS_CONFIG.destroyer.evolutions).toEqual(['annihilator']);
+    expect(TANKS_CONFIG.tri_angle.evolutions).toEqual(['booster', 'fighter']);
+    expect(TANKS_CONFIG.twin_flank.evolutions).toEqual([]);
+    expect(TANKS_CONFIG.gunner.evolutions).toEqual([]);
+
     // 驗證進化鏈
-    expect(TWIN_TANK_DEFINITION.evolutions).toEqual(['triple_shot']);
-    expect(SNIPER_TANK_DEFINITION.evolutions).toEqual(['assassin']);
-    expect(MACHINE_GUN_TANK_DEFINITION.evolutions).toEqual(['destroyer']);
-    expect(FLANK_GUARD_TANK_DEFINITION.evolutions).toEqual(['twin_flank']);
+    expect(TWIN_TANK_DEFINITION.evolutions).toEqual([
+      'triple_shot',
+      'quad_tank',
+      'twin_flank',
+    ]);
+    expect(SNIPER_TANK_DEFINITION.evolutions).toEqual(['assassin', 'hunter']);
+    expect(MACHINE_GUN_TANK_DEFINITION.evolutions).toEqual([
+      'destroyer',
+      'gunner',
+    ]);
+    expect(FLANK_GUARD_TANK_DEFINITION.evolutions).toEqual([
+      'tri_angle',
+      'quad_tank',
+      'twin_flank',
+    ]);
+  });
+
+  it('configures new Tier 3 tank specs (Quad Tank, Hunter, Gunner, Tri-Angle)', () => {
+    const quad = TANKS_CONFIG.quad_tank;
+    expect(quad.barrels).toHaveLength(4);
+    const quadAngles = quad.barrels.map((b) => b.angle);
+    expect(quadAngles).toContain(0);
+    expect(quadAngles).toContain(Math.PI / 2);
+    expect(quadAngles).toContain(Math.PI);
+    expect(quadAngles).toContain(-Math.PI / 2);
+
+    const hunter = TANKS_CONFIG.hunter;
+    expect(hunter.barrels).toHaveLength(2);
+    expect(hunter.fovMultiplier).toBe(1.15);
+    // 驗證底層短粗、表層長細的疊管結構
+    expect(hunter.barrels[0].width).toBe(24);
+    expect(hunter.barrels[0].length).toBe(42);
+    expect(hunter.barrels[1].width).toBe(18);
+    expect(hunter.barrels[1].length).toBe(50);
+
+    const gunner = TANKS_CONFIG.gunner;
+    expect(gunner.barrels).toHaveLength(4);
+    for (const b of gunner.barrels) {
+      expect(b.width).toBe(10);
+      expect(b.bulletSizeMultiplier).toBe(0.5);
+    }
+
+    const triAngle = TANKS_CONFIG.tri_angle;
+    expect(triAngle.barrels).toHaveLength(3);
+    expect(triAngle.barrels[1].recoilMultiplier).toBe(1.6);
+    expect(triAngle.barrels[2].recoilMultiplier).toBe(1.6);
   });
 
   it('configures Tier 3 combat specs: Assassin FOV 1.25 and Destroyer width 36 & recoil 3.5', () => {
@@ -120,5 +178,69 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
 
     const twinFlank = TANKS_CONFIG.twin_flank;
     expect(twinFlank.barrels).toHaveLength(4);
+  });
+
+  it('verifies all 8 Tier 4 tanks require Level 45 and inherit correctly', () => {
+    const tier4Ids: TankClassId[] = [
+      'triplet',
+      'penta_shot',
+      'octo_tank',
+      'ranger',
+      'predator',
+      'annihilator',
+      'booster',
+      'fighter',
+    ];
+
+    for (const id of tier4Ids) {
+      const def = TANKS_CONFIG[id];
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(4);
+      expect(def.requiredLevel).toBe(45);
+      expect(def.evolutions).toHaveLength(0); // 終極形態無後續進化
+    }
+  });
+
+  it('configures Tier 4 combat specs accurately', () => {
+    // Ranger
+    const ranger = TANKS_CONFIG.ranger;
+    expect(ranger.fovMultiplier).toBe(1.428);
+    expect(ranger.barrels[0].length).toBe(70);
+    expect(ranger.barrels[0].bulletSpeedMultiplier).toBe(1.8);
+
+    // Annihilator
+    const annihilator = TANKS_CONFIG.annihilator;
+    expect(annihilator.barrels[0].width).toBe(48);
+    expect(annihilator.barrels[0].recoilMultiplier).toBe(4.5);
+    expect(annihilator.barrels[0].bulletSizeMultiplier).toBe(2.67);
+
+    // Predator
+    const predator = TANKS_CONFIG.predator;
+    expect(predator.fovMultiplier).toBe(1.35);
+    expect(predator.barrels).toHaveLength(3);
+    expect(predator.barrels[0].width).toBe(26);
+    expect(predator.barrels[1].width).toBe(20);
+    expect(predator.barrels[2].width).toBe(15);
+
+    // Octo Tank
+    const octo = TANKS_CONFIG.octo_tank;
+    expect(octo.barrels).toHaveLength(8);
+
+    // Triplet
+    const triplet = TANKS_CONFIG.triplet;
+    expect(triplet.barrels).toHaveLength(3);
+    expect(triplet.barrels[0].offsetY).toBe(0);
+    expect(triplet.barrels[1].offsetY).toBe(-12);
+    expect(triplet.barrels[2].offsetY).toBe(12);
+
+    // Penta Shot
+    const penta = TANKS_CONFIG.penta_shot;
+    expect(penta.barrels).toHaveLength(5);
+
+    // Booster & Fighter
+    const booster = TANKS_CONFIG.booster;
+    expect(booster.barrels).toHaveLength(5);
+    const fighter = TANKS_CONFIG.fighter;
+    expect(fighter.barrels).toHaveLength(5);
   });
 });

@@ -3,11 +3,12 @@
  * 來源：https://diepio.fandom.com/wiki/Levels 與 https://diepio.fandom.com/wiki/Score
  */
 
-export const MAX_LEVEL = 30;
+export const MAX_LEVEL = 45;
 
 /**
- * 達到各等級（Lv 1 ~ Lv 30）所需之累積分數查表
- * 索引 0 為 Lv 1 (0 分)，索引 29 為 Lv 30 (6184 分)
+ * 達到各等級（Lv 1 ~ Lv 45）所需之累積分數查表
+ * 索引 0 為 Lv 1 (0 分)，索引 44 為 Lv 45 (23536 分)
+ * 來源：https://diepio.fandom.com/wiki/Score
  */
 export const SCORE_FOR_LEVEL: readonly number[] = [
   0, // Lv 1
@@ -39,13 +40,28 @@ export const SCORE_FOR_LEVEL: readonly number[] = [
   4379, // Lv 27
   4925, // Lv 28
   5525, // Lv 29
-  6184, // Lv 30 (Tier 3 自動進化/滿級門檻)
+  6184, // Lv 30 (Tier 3 轉職門檻)
+  6907, // Lv 31
+  7698, // Lv 32
+  8537, // Lv 33
+  9426, // Lv 34
+  10368, // Lv 35
+  11367, // Lv 36
+  12426, // Lv 37
+  13549, // Lv 38
+  14739, // Lv 39
+  16000, // Lv 40
+  17337, // Lv 41
+  18754, // Lv 42
+  20256, // Lv 43
+  21849, // Lv 44
+  23536, // Lv 45 (Tier 4 終極轉職/滿級門檻)
 ];
 
 /**
  * 依據當前累積分數計算對應等級（二分搜尋，零配置）
  * @param score 當前累積分數
- * @returns 1 ~ 30 等級（超過 6184 分仍封頂於 Lv 30）
+ * @returns 1 ~ 45 等級（超過 23536 分仍封頂於 Lv 45）
  */
 export function levelForScore(score: number): number {
   if (score <= 0) return 1;
@@ -70,12 +86,18 @@ export function levelForScore(score: number): number {
 
 /**
  * 依據等級計算累計應獲得之技能點數
- * 規則：Lv 2 ~ Lv 28 每級 +1 點；Lv 29 不給點；Lv 30 再 +1 點（Lv 30 共獲得 28 點）
- * @param level 當前等級 (1 ~ 30)
+ * 規則：Lv 2 ~ Lv 28 每級 +1 點（累計 27 點）；之後每 3 級 (Lv 30, 33, 36, 39, 42, 45) 各 +1 點（Lv 45 共 33 點）
+ * @param level 當前等級 (1 ~ 45)
  */
 export function pointsForLevel(level: number): number {
   if (level <= 1) return 0;
-  if (level >= 30) return 28;
-  if (level === 29) return 27;
-  return level - 1;
+  if (level <= 28) return level - 1;
+  let pts = 27;
+  if (level >= 30) pts++;
+  if (level >= 33) pts++;
+  if (level >= 36) pts++;
+  if (level >= 39) pts++;
+  if (level >= 42) pts++;
+  if (level >= 45) pts++;
+  return pts;
 }

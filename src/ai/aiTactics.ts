@@ -46,13 +46,34 @@ export function applyAiBuild(tank: Tank): void {
   let preference: readonly number[] = AI_BUILD_ARCHETYPES.BALANCED;
   const cid = tank.definition.id;
 
-  if (cid === 'sniper' || cid === 'assassin') {
+  if (
+    cid === 'sniper' ||
+    cid === 'assassin' ||
+    cid === 'hunter' ||
+    cid === 'ranger' ||
+    cid === 'predator'
+  ) {
     preference = AI_BUILD_ARCHETYPES.KITER;
-  } else if (cid === 'destroyer') {
+  } else if (cid === 'destroyer' || cid === 'annihilator') {
     preference = AI_BUILD_ARCHETYPES.GLASS_CANNON;
-  } else if (cid === 'twin' || cid === 'triple_shot' || cid === 'machine_gun') {
+  } else if (
+    cid === 'twin' ||
+    cid === 'triple_shot' ||
+    cid === 'machine_gun' ||
+    cid === 'gunner' ||
+    cid === 'triplet'
+  ) {
     preference = AI_BUILD_ARCHETYPES.GLASS_CANNON;
-  } else if (cid === 'flank_guard' || cid === 'twin_flank') {
+  } else if (cid === 'tri_angle' || cid === 'booster') {
+    preference = AI_BUILD_ARCHETYPES.RAMMER;
+  } else if (
+    cid === 'flank_guard' ||
+    cid === 'twin_flank' ||
+    cid === 'quad_tank' ||
+    cid === 'penta_shot' ||
+    cid === 'octo_tank' ||
+    cid === 'fighter'
+  ) {
     preference = AI_BUILD_ARCHETYPES.BALANCED;
   }
 
@@ -76,17 +97,38 @@ export function applyAiBuild(tank: Tank): void {
  */
 export function getOptimalCombatDistance(classId: TankClassId): number {
   switch (classId) {
+    case 'ranger':
+      return 620;
+    case 'predator':
+      return 560;
     case 'assassin':
       return 520;
+    case 'hunter':
+      return 480;
     case 'sniper':
       return 460;
+    case 'annihilator':
+      return 240;
     case 'destroyer':
       return 250;
+    case 'booster':
+      return 200;
+    case 'tri_angle':
+      return 220;
+    case 'fighter':
+      return 300;
+    case 'octo_tank':
+      return 280;
+    case 'penta_shot':
     case 'machine_gun':
       return 320;
+    case 'quad_tank':
+      return 300;
+    case 'triplet':
     case 'twin':
     case 'triple_shot':
     case 'twin_flank':
+    case 'gunner':
       return 360;
     default:
       return 340;

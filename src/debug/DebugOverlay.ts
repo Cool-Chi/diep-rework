@@ -365,6 +365,24 @@ export class DebugOverlay {
     );
     btnContainer.appendChild(lv30Btn);
 
+    // 升至 Lv 45 滿級按鈕 (23536 分)
+    const lv45Btn = createBtn(
+      'Level 45 (23536)',
+      () => {
+        const tank = this.game.playerTank;
+        if (tank.score < 23536) {
+          this.game.levelingSystem.addScore(
+            tank,
+            23536 - tank.score,
+            this.game.eventBus,
+          );
+        }
+        this.renderMetrics();
+      },
+      '#783a3a',
+    );
+    btnContainer.appendChild(lv45Btn);
+
     // 一鍵升至 Lv 30 並點滿 28 點
     const autoMaxBtn = createBtn(
       'Auto-Max 28 Pts',
@@ -490,7 +508,7 @@ export class DebugOverlay {
     );
     btnContainer.appendChild(triggerEvoBtn);
 
-    // 職業一鍵切換按鈕區 (Tier 1 ~ Tier 3 共 9 款職業)
+    // 職業一鍵切換按鈕區 (Tier 1 ~ Tier 4 全 21 款職業)
     const classList: TankClassId[] = [
       'basic',
       'twin',
@@ -501,12 +519,35 @@ export class DebugOverlay {
       'assassin',
       'destroyer',
       'twin_flank',
+      'quad_tank',
+      'hunter',
+      'gunner',
+      'tri_angle',
+      'triplet',
+      'penta_shot',
+      'octo_tank',
+      'ranger',
+      'predator',
+      'annihilator',
+      'booster',
+      'fighter',
     ];
     for (let c = 0; c < classList.length; c++) {
       const cid = classList[c];
       const btn = createBtn(
         `Class: ${TANKS_CONFIG[cid].name}`,
         () => {
+          const reqLv = TANKS_CONFIG[cid].requiredLevel;
+          if (this.game.playerTank.level < reqLv) {
+            const reqScore = SCORE_FOR_LEVEL[reqLv - 1];
+            if (this.game.playerTank.score < reqScore) {
+              this.game.levelingSystem.addScore(
+                this.game.playerTank,
+                reqScore - this.game.playerTank.score,
+                this.game.eventBus,
+              );
+            }
+          }
           this.game.levelingSystem.evolveTank(
             this.game.playerTank,
             cid,

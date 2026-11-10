@@ -26,6 +26,20 @@ const TIER3_CLASSES: readonly TankClassId[] = [
   'assassin',
   'destroyer',
   'twin_flank',
+  'quad_tank',
+  'hunter',
+  'gunner',
+  'tri_angle',
+];
+const TIER4_CLASSES: readonly TankClassId[] = [
+  'triplet',
+  'penta_shot',
+  'octo_tank',
+  'ranger',
+  'predator',
+  'annihilator',
+  'booster',
+  'fighter',
 ];
 
 interface DeadAiRecord {
@@ -204,11 +218,22 @@ export class SpawnSystem {
       return TIER3_CLASSES[Math.floor(Math.random() * TIER3_CLASSES.length)];
     }
 
-    // 玩家 Lv 30 滿級: 40% Tier 2, 60% Tier 3 菁英
-    if (r < 0.4) {
-      return TIER2_CLASSES[Math.floor(Math.random() * TIER2_CLASSES.length)];
+    if (playerLevel < 45) {
+      // 玩家 Lv 30~44: 20% Tier 2, 60% Tier 3, 20% Tier 4
+      if (r < 0.2) {
+        return TIER2_CLASSES[Math.floor(Math.random() * TIER2_CLASSES.length)];
+      }
+      if (r < 0.8) {
+        return TIER3_CLASSES[Math.floor(Math.random() * TIER3_CLASSES.length)];
+      }
+      return TIER4_CLASSES[Math.floor(Math.random() * TIER4_CLASSES.length)];
     }
-    return TIER3_CLASSES[Math.floor(Math.random() * TIER3_CLASSES.length)];
+
+    // 玩家 Lv 45 滿級: 30% Tier 3, 70% Tier 4 菁英
+    if (r < 0.3) {
+      return TIER3_CLASSES[Math.floor(Math.random() * TIER3_CLASSES.length)];
+    }
+    return TIER4_CLASSES[Math.floor(Math.random() * TIER4_CLASSES.length)];
   }
 
   private pickLevelForClass(def: TankDefinition, playerLevel: number): number {
@@ -220,7 +245,11 @@ export class SpawnSystem {
       const maxL = Math.min(29, Math.max(15, playerLevel));
       return Math.floor(Math.random() * (maxL - 15 + 1)) + 15;
     }
-    return 30; // Tier 3 固定為 Lv 30
+    if (def.tier === 3) {
+      const maxL = Math.min(44, Math.max(30, playerLevel));
+      return Math.floor(Math.random() * (maxL - 30 + 1)) + 30;
+    }
+    return 45; // Tier 4 固定為 Lv 45 滿級
   }
 
   public getRandomSpawnPosition(

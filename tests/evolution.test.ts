@@ -177,10 +177,10 @@ describe('Milestone 4a: Evolution & Class Specialization', () => {
     leveling.checkEvolution(tank, eventBus);
     expect(availableCandidates).toHaveLength(0);
 
-    // 3. 升至 Lv 30 (累計 6184 分)，觸發 Assassin 進化
+    // 3. 升至 Lv 30 (累計 6184 分)，觸發 Assassin 與 Hunter 進化
     leveling.addScore(tank, 6184 - 5525, eventBus);
     expect(tank.level).toBe(30);
-    expect(availableCandidates).toEqual(['assassin']);
+    expect(availableCandidates).toEqual(['assassin', 'hunter']);
 
     // 4. 進化為 Assassin
     const success = leveling.evolveTank(tank, 'assassin', eventBus);
@@ -290,5 +290,40 @@ describe('Milestone 4a: Evolution & Class Specialization', () => {
     expect(panel.visible).toBe(true);
 
     panel.destroy();
+  });
+
+  it('progresses full path from Basic -> Tier 2 -> Tier 3 -> Tier 4 at Level 45', () => {
+    const eventBus = new EventBus();
+    const tank = new Tank(1, 100, 100);
+    const leveling = new LevelingSystem(eventBus, [tank]);
+
+    let candidates: string[] = [];
+    eventBus.onEvolutionAvailable((_id, cands) => {
+      candidates = [...cands];
+    });
+
+    // 1. 升至 Lv 15，轉職 Machine Gun
+    leveling.addScore(tank, 787, eventBus);
+    expect(tank.level).toBe(15);
+    expect(candidates).toContain('machine_gun');
+    leveling.evolveTank(tank, 'machine_gun', eventBus);
+    expect(tank.definition.id).toBe('machine_gun');
+
+    // 2. 升至 Lv 30，轉職 Destroyer
+    leveling.addScore(tank, 6184 - 787, eventBus);
+    expect(tank.level).toBe(30);
+    expect(candidates).toEqual(['destroyer', 'gunner']);
+    leveling.evolveTank(tank, 'destroyer', eventBus);
+    expect(tank.definition.id).toBe('destroyer');
+
+    // 3. 升至 Lv 45，觸發 Annihilator 進化
+    leveling.addScore(tank, 23536 - 6184, eventBus);
+    expect(tank.level).toBe(45);
+    expect(candidates).toEqual(['annihilator']);
+    const evolved = leveling.evolveTank(tank, 'annihilator', eventBus);
+    expect(evolved).toBe(true);
+    expect(tank.definition.id).toBe('annihilator');
+    expect(tank.definition.tier).toBe(4);
+    expect(tank.definition.barrels[0].width).toBe(48);
   });
 });

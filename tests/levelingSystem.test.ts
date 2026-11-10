@@ -47,11 +47,17 @@ describe('LevelingSystem (Score, Level up, Stat allocation & Reset)', () => {
     expect(tank.level).toBe(30);
     expect(tank.statPoints).toBe(28);
 
-    // 4. 超過 Lv 30 門檻繼續加分 -> 等級維持 30，不給予額外點數
+    // 4. 升至 Lv 45 (23536 分) -> 應累計 33 點技能點
+    levelingSystem.addScore(tank, 23536 - 6184, eventBus);
+    expect(tank.score).toBe(23536);
+    expect(tank.level).toBe(45);
+    expect(tank.statPoints).toBe(33);
+
+    // 5. 超過 Lv 45 滿級門檻繼續加分 -> 等級維持 45，不給予額外點數
     levelingSystem.addScore(tank, 5000, eventBus);
-    expect(tank.score).toBe(11184);
-    expect(tank.level).toBe(30);
-    expect(tank.statPoints).toBe(28);
+    expect(tank.score).toBe(28536);
+    expect(tank.level).toBe(45);
+    expect(tank.statPoints).toBe(33);
   });
 
   it('spends stat points up to maximum 7 and updates derived stats immediately', () => {

@@ -6,20 +6,21 @@ import {
   SCORE_FOR_LEVEL,
 } from '../src/config/levels.config';
 
-describe('Leveling Table and Score Thresholds (M3a)', () => {
-  it('SCORE_FOR_LEVEL 表長度為 30，且分數嚴格遞增', () => {
+describe('Leveling Table and Score Thresholds (M3a & M7)', () => {
+  it('SCORE_FOR_LEVEL 表長度為 45，且分數嚴格遞增', () => {
     expect(SCORE_FOR_LEVEL.length).toBe(MAX_LEVEL);
-    expect(MAX_LEVEL).toBe(30);
+    expect(MAX_LEVEL).toBe(45);
 
     for (let i = 1; i < SCORE_FOR_LEVEL.length; i++) {
       expect(SCORE_FOR_LEVEL[i]).toBeGreaterThan(SCORE_FOR_LEVEL[i - 1]);
     }
   });
 
-  it('原版關鍵等級門檻精確驗證 (Lv 1=0, Lv 15=787, Lv 30=6184)', () => {
+  it('原版關鍵等級門檻精確驗證 (Lv 1=0, Lv 15=787, Lv 30=6184, Lv 45=23536)', () => {
     expect(SCORE_FOR_LEVEL[0]).toBe(0); // Lv 1
     expect(SCORE_FOR_LEVEL[14]).toBe(787); // Lv 15 (Tier 2 轉職)
     expect(SCORE_FOR_LEVEL[29]).toBe(6184); // Lv 30 (Tier 3 進化)
+    expect(SCORE_FOR_LEVEL[44]).toBe(23536); // Lv 45 (Tier 4 進化/滿級)
   });
 
   it('levelForScore 在各邊界精準判定與二分搜尋驗證', () => {
@@ -36,21 +37,33 @@ describe('Leveling Table and Score Thresholds (M3a)', () => {
     expect(levelForScore(787)).toBe(15);
     expect(levelForScore(788)).toBe(15);
 
-    // Lv 30 滿級臨界點 (6184 分)
+    // Lv 30 轉職臨界點 (6184 分)
     expect(levelForScore(6183)).toBe(29);
     expect(levelForScore(6184)).toBe(30);
-    // 超過滿級分數仍封頂於 Lv 30
-    expect(levelForScore(100000)).toBe(30);
+
+    // Lv 45 滿級臨界點 (23536 分)
+    expect(levelForScore(23535)).toBe(44);
+    expect(levelForScore(23536)).toBe(45);
+    // 超過滿級分數仍封頂於 Lv 45
+    expect(levelForScore(100000)).toBe(45);
   });
 
-  it('pointsForLevel 技能點規則驗證 (Lv 2~28 每級 +1，Lv 29 不給，Lv 30 共 28 點)', () => {
+  it('pointsForLevel 技能點規則驗證 (Lv 2~28 每級 +1，Lv 29 不給，Lv 30~45 每 3 級 +1，滿級 33 點)', () => {
     expect(pointsForLevel(1)).toBe(0);
     expect(pointsForLevel(2)).toBe(1);
     expect(pointsForLevel(3)).toBe(2);
     expect(pointsForLevel(15)).toBe(14);
     expect(pointsForLevel(28)).toBe(27);
     expect(pointsForLevel(29)).toBe(27); // Lv 29 原版不給點
-    expect(pointsForLevel(30)).toBe(28); // Lv 30 共 28 點
-    expect(pointsForLevel(35)).toBe(28); // 超過 30 封頂 28 點
+    expect(pointsForLevel(30)).toBe(28); // Lv 30 +1 點
+    expect(pointsForLevel(31)).toBe(28);
+    expect(pointsForLevel(32)).toBe(28);
+    expect(pointsForLevel(33)).toBe(29); // Lv 33 +1 點
+    expect(pointsForLevel(36)).toBe(30); // Lv 36 +1 點
+    expect(pointsForLevel(39)).toBe(31); // Lv 39 +1 點
+    expect(pointsForLevel(42)).toBe(32); // Lv 42 +1 點
+    expect(pointsForLevel(44)).toBe(32);
+    expect(pointsForLevel(45)).toBe(33); // Lv 45 +1 點 (滿級共 33 點)
+    expect(pointsForLevel(50)).toBe(33); // 超過 45 封頂 33 點
   });
 });

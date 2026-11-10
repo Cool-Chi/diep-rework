@@ -117,14 +117,15 @@ export class LevelingSystem {
   }
 
   /**
-   * 檢查坦克是否達成轉職條件並發布可進化事件 (Tier 1 @ Lv 15, Tier 2 @ Lv 30)
+   * 檢查坦克是否達成轉職條件並發布可進化事件 (Tier 1 @ Lv 15, Tier 2 @ Lv 30, Tier 3 @ Lv 45)
    */
   public checkEvolution(tank: Tank, eventBus?: EventBus): void {
     if (!tank.active || tank.definition.evolutions.length === 0) return;
 
     if (
       (tank.definition.tier === 1 && tank.level >= 15) ||
-      (tank.definition.tier === 2 && tank.level >= 30)
+      (tank.definition.tier === 2 && tank.level >= 30) ||
+      (tank.definition.tier === 3 && tank.level >= 45)
     ) {
       if (tank.isAi) {
         // AI 坦克達標時自動隨機轉職對應階層職業
