@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BASE_BARREL_LENGTH } from '../src/config/constants';
 import {
   BASIC_TANK_DEFINITION,
   FLANK_GUARD_TANK_DEFINITION,
@@ -138,14 +139,23 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
     const hunter = TANKS_CONFIG.hunter;
     expect(hunter.barrels).toHaveLength(2);
     expect(hunter.fovMultiplier).toBe(1.15);
-    // 驗證底層短粗、表層長細的疊管結構
+    // 驗證底層短粗、表層長細的疊管結構 (38 / 48)
     expect(hunter.barrels[0].width).toBe(24);
-    expect(hunter.barrels[0].length).toBe(42);
+    expect(hunter.barrels[0].length).toBe(38);
     expect(hunter.barrels[1].width).toBe(18);
-    expect(hunter.barrels[1].length).toBe(50);
+    expect(hunter.barrels[1].length).toBe(48);
 
     const gunner = TANKS_CONFIG.gunner;
     expect(gunner.barrels).toHaveLength(4);
+    // 外側短管在底層 (長 30, offsetY ±12)，內側長管在表層 (長 38, offsetY ±5)
+    expect(gunner.barrels[0].length).toBe(30);
+    expect(gunner.barrels[0].offsetY).toBe(-12);
+    expect(gunner.barrels[1].length).toBe(30);
+    expect(gunner.barrels[1].offsetY).toBe(12);
+    expect(gunner.barrels[2].length).toBe(38);
+    expect(gunner.barrels[2].offsetY).toBe(-5);
+    expect(gunner.barrels[3].length).toBe(38);
+    expect(gunner.barrels[3].offsetY).toBe(5);
     for (const b of gunner.barrels) {
       expect(b.width).toBe(10);
       expect(b.bulletSizeMultiplier).toBe(0.5);
@@ -211,35 +221,63 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
     // Annihilator
     const annihilator = TANKS_CONFIG.annihilator;
     expect(annihilator.barrels[0].width).toBe(48);
+    expect(annihilator.barrels[0].length).toBe(38);
     expect(annihilator.barrels[0].recoilMultiplier).toBe(4.5);
     expect(annihilator.barrels[0].bulletSizeMultiplier).toBe(2.67);
 
-    // Predator
+    // Predator (38 / 48 / 58 望遠階梯疊管)
     const predator = TANKS_CONFIG.predator;
     expect(predator.fovMultiplier).toBe(1.35);
     expect(predator.barrels).toHaveLength(3);
     expect(predator.barrels[0].width).toBe(26);
+    expect(predator.barrels[0].length).toBe(38);
     expect(predator.barrels[1].width).toBe(20);
+    expect(predator.barrels[1].length).toBe(48);
     expect(predator.barrels[2].width).toBe(15);
+    expect(predator.barrels[2].length).toBe(58);
 
     // Octo Tank
     const octo = TANKS_CONFIG.octo_tank;
     expect(octo.barrels).toHaveLength(8);
 
-    // Triplet
+    // Triplet (兩側在底層，中央在表層)
     const triplet = TANKS_CONFIG.triplet;
     expect(triplet.barrels).toHaveLength(3);
-    expect(triplet.barrels[0].offsetY).toBe(0);
-    expect(triplet.barrels[1].offsetY).toBe(-12);
-    expect(triplet.barrels[2].offsetY).toBe(12);
+    expect(triplet.barrels[0].offsetY).toBe(-12);
+    expect(triplet.barrels[0].length).toBe(36);
+    expect(triplet.barrels[1].offsetY).toBe(12);
+    expect(triplet.barrels[1].length).toBe(36);
+    expect(triplet.barrels[2].offsetY).toBe(0);
+    expect(triplet.barrels[2].length).toBe(44);
 
-    // Penta Shot
+    // Penta Shot (外側底層 -> 內側中層 -> 中央表層)
     const penta = TANKS_CONFIG.penta_shot;
     expect(penta.barrels).toHaveLength(5);
+    expect(penta.barrels[0].length).toBe(32);
+    expect(penta.barrels[0].angle).toBe(-Math.PI / 4);
+    expect(penta.barrels[1].length).toBe(32);
+    expect(penta.barrels[1].angle).toBe(Math.PI / 4);
+    expect(penta.barrels[2].length).toBe(38);
+    expect(penta.barrels[2].angle).toBe(-Math.PI / 8);
+    expect(penta.barrels[3].length).toBe(38);
+    expect(penta.barrels[3].angle).toBe(Math.PI / 8);
+    expect(penta.barrels[4].length).toBe(44);
+    expect(penta.barrels[4].angle).toBe(0);
 
-    // Booster & Fighter
+    // Booster (外側推進管底層 -> 內側推進管中層 -> 前主砲表層)
     const booster = TANKS_CONFIG.booster;
     expect(booster.barrels).toHaveLength(5);
+    expect(booster.barrels[0].length).toBe(28);
+    expect(booster.barrels[0].angle).toBeCloseTo((155 * Math.PI) / 180);
+    expect(booster.barrels[1].length).toBe(28);
+    expect(booster.barrels[1].angle).toBeCloseTo(-(155 * Math.PI) / 180);
+    expect(booster.barrels[2].length).toBe(34);
+    expect(booster.barrels[2].angle).toBeCloseTo((145 * Math.PI) / 180);
+    expect(booster.barrels[3].length).toBe(34);
+    expect(booster.barrels[3].angle).toBeCloseTo(-(145 * Math.PI) / 180);
+    expect(booster.barrels[4].length).toBe(BASE_BARREL_LENGTH);
+    expect(booster.barrels[4].angle).toBe(0);
+
     const fighter = TANKS_CONFIG.fighter;
     expect(fighter.barrels).toHaveLength(5);
   });

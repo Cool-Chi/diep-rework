@@ -245,7 +245,7 @@ export const FLANK_GUARD_TANK_DEFINITION: TankDefinition = {
   ],
 };
 
-/** Tier 3: 三連發 (Triple Shot) - 正前方與兩側 45 度三向射擊 */
+/** Tier 3: 三連發 (Triple Shot) - 正前方與兩側 45 度三向射擊 (兩側在底層，中央在表層) */
 export const TRIPLE_SHOT_TANK_DEFINITION: TankDefinition = {
   id: 'triple_shot',
   name: 'Triple Shot',
@@ -257,22 +257,7 @@ export const TRIPLE_SHOT_TANK_DEFINITION: TankDefinition = {
   parentClassId: 'twin',
   evolutions: ['triplet', 'penta_shot'],
   barrels: [
-    {
-      length: BASE_BARREL_LENGTH,
-      width: BASE_BARREL_WIDTH,
-      offsetX: 0,
-      offsetY: 0,
-      angle: 0,
-      spread: 0,
-      fireDelayRatio: 0,
-      reloadMultiplier: 1.0,
-      recoilMultiplier: 0.7,
-      bulletSpeedMultiplier: 1.0,
-      bulletDamageMultiplier: 0.7,
-      bulletPenMultiplier: 1.0,
-      bulletSizeMultiplier: 0.9,
-      bulletLifespanTicks: 75,
-    },
+    // 兩側砲管（索引 0, 1 先繪製於底層）
     {
       length: BASE_BARREL_LENGTH,
       width: BASE_BARREL_WIDTH,
@@ -295,6 +280,23 @@ export const TRIPLE_SHOT_TANK_DEFINITION: TankDefinition = {
       offsetX: 0,
       offsetY: 0,
       angle: Math.PI / 4, // +45 度
+      spread: 0,
+      fireDelayRatio: 0,
+      reloadMultiplier: 1.0,
+      recoilMultiplier: 0.7,
+      bulletSpeedMultiplier: 1.0,
+      bulletDamageMultiplier: 0.7,
+      bulletPenMultiplier: 1.0,
+      bulletSizeMultiplier: 0.9,
+      bulletLifespanTicks: 75,
+    },
+    // 中央主砲管（索引 2 後繪製於表層，重疊處維持完整描邊）
+    {
+      length: BASE_BARREL_LENGTH,
+      width: BASE_BARREL_WIDTH,
+      offsetX: 0,
+      offsetY: 0,
+      angle: 0,
       spread: 0,
       fireDelayRatio: 0,
       reloadMultiplier: 1.0,
@@ -543,9 +545,9 @@ export const HUNTER_TANK_DEFINITION: TankDefinition = {
   parentClassId: 'sniper',
   evolutions: ['predator'],
   barrels: [
-    // 底層砲管 (先畫，位於後方)：較短較粗 (寬 24, 長 42)
+    // 底層砲管 (先畫，位於後方)：較短較粗 (寬 24, 長 38)
     {
-      length: 42,
+      length: 38,
       width: 24,
       tipWidth: 24,
       offsetX: 0,
@@ -561,9 +563,9 @@ export const HUNTER_TANK_DEFINITION: TankDefinition = {
       bulletSizeMultiplier: 1.0,
       bulletLifespanTicks: 95,
     },
-    // 表層砲管 (後畫，覆蓋在上方)：較長較細 (寬 18, 長 50)
+    // 表層砲管 (後畫，覆蓋在上方)：較長較細 (寬 18, 長 48)
     {
-      length: 50,
+      length: 48,
       width: 18,
       tipWidth: 18,
       offsetX: 0,
@@ -582,7 +584,7 @@ export const HUNTER_TANK_DEFINITION: TankDefinition = {
   ],
 };
 
-/** Tier 3: 砲手 (Gunner) - 4 根密集平行小口徑管 (高射速、小彈丸) */
+/** Tier 3: 砲手 (Gunner) - 4 根密集平行小口徑管 (外側短管在底層、內側長管在表層) */
 export const GUNNER_TANK_DEFINITION: TankDefinition = {
   id: 'gunner',
   name: 'Gunner',
@@ -594,38 +596,7 @@ export const GUNNER_TANK_DEFINITION: TankDefinition = {
   parentClassId: 'machine_gun',
   evolutions: [],
   barrels: [
-    {
-      length: 36,
-      width: 10,
-      offsetX: 0,
-      offsetY: -5,
-      angle: 0,
-      spread: 0.05,
-      fireDelayRatio: 0,
-      reloadMultiplier: 0.67,
-      recoilMultiplier: 0.4,
-      bulletSpeedMultiplier: 1.25,
-      bulletDamageMultiplier: 0.45,
-      bulletPenMultiplier: 0.55,
-      bulletSizeMultiplier: 0.5, // 半徑 4.5 (觸發 smallTexture)
-      bulletLifespanTicks: 70,
-    },
-    {
-      length: 36,
-      width: 10,
-      offsetX: 0,
-      offsetY: 5,
-      angle: 0,
-      spread: 0.05,
-      fireDelayRatio: 0.5,
-      reloadMultiplier: 0.67,
-      recoilMultiplier: 0.4,
-      bulletSpeedMultiplier: 1.25,
-      bulletDamageMultiplier: 0.45,
-      bulletPenMultiplier: 0.55,
-      bulletSizeMultiplier: 0.5,
-      bulletLifespanTicks: 70,
-    },
+    // 外側左管 (長 30, offsetY -12, 索引 0 先畫於底層)
     {
       length: 30,
       width: 10,
@@ -642,6 +613,7 @@ export const GUNNER_TANK_DEFINITION: TankDefinition = {
       bulletSizeMultiplier: 0.5,
       bulletLifespanTicks: 70,
     },
+    // 外側右管 (長 30, offsetY 12, 索引 1 先畫於底層)
     {
       length: 30,
       width: 10,
@@ -650,6 +622,40 @@ export const GUNNER_TANK_DEFINITION: TankDefinition = {
       angle: 0,
       spread: 0.05,
       fireDelayRatio: 0.75,
+      reloadMultiplier: 0.67,
+      recoilMultiplier: 0.4,
+      bulletSpeedMultiplier: 1.25,
+      bulletDamageMultiplier: 0.45,
+      bulletPenMultiplier: 0.55,
+      bulletSizeMultiplier: 0.5,
+      bulletLifespanTicks: 70,
+    },
+    // 內側左管 (長 38, offsetY -5, 索引 2 後畫於表層)
+    {
+      length: 38,
+      width: 10,
+      offsetX: 0,
+      offsetY: -5,
+      angle: 0,
+      spread: 0.05,
+      fireDelayRatio: 0,
+      reloadMultiplier: 0.67,
+      recoilMultiplier: 0.4,
+      bulletSpeedMultiplier: 1.25,
+      bulletDamageMultiplier: 0.45,
+      bulletPenMultiplier: 0.55,
+      bulletSizeMultiplier: 0.5, // 半徑 4.5 (觸發 smallTexture)
+      bulletLifespanTicks: 70,
+    },
+    // 內側右管 (長 38, offsetY 5, 索引 3 後畫於表層)
+    {
+      length: 38,
+      width: 10,
+      offsetX: 0,
+      offsetY: 5,
+      angle: 0,
+      spread: 0.05,
+      fireDelayRatio: 0.5,
       reloadMultiplier: 0.67,
       recoilMultiplier: 0.4,
       bulletSpeedMultiplier: 1.25,
@@ -727,7 +733,7 @@ export const TRI_ANGLE_TANK_DEFINITION: TankDefinition = {
   ],
 };
 
-/** Tier 4: 三重砲 (Triplet) - 前方三管密集平行射擊 (中長側短，集中爆發) */
+/** Tier 4: 三重砲 (Triplet) - 前方三管密集平行射擊 (兩側在底層，中央長管在表層) */
 export const TRIPLET_TANK_DEFINITION: TankDefinition = {
   id: 'triplet',
   name: 'Triplet',
@@ -739,24 +745,7 @@ export const TRIPLET_TANK_DEFINITION: TankDefinition = {
   parentClassId: 'triple_shot',
   evolutions: [],
   barrels: [
-    // 中間長砲管 (長 42)
-    {
-      length: 42,
-      width: BASE_BARREL_WIDTH,
-      offsetX: 0,
-      offsetY: 0,
-      angle: 0,
-      spread: 0,
-      fireDelayRatio: 0,
-      reloadMultiplier: 1.0,
-      recoilMultiplier: 0.7,
-      bulletSpeedMultiplier: 1.0,
-      bulletDamageMultiplier: 0.6,
-      bulletPenMultiplier: 0.85,
-      bulletSizeMultiplier: 0.9,
-      bulletLifespanTicks: 75,
-    },
-    // 左側砲管 (長 36, 延遲 0.5)
+    // 左側砲管 (長 36, 延遲 0.5，索引 0 先畫於底層)
     {
       length: 36,
       width: BASE_BARREL_WIDTH,
@@ -773,7 +762,7 @@ export const TRIPLET_TANK_DEFINITION: TankDefinition = {
       bulletSizeMultiplier: 0.9,
       bulletLifespanTicks: 75,
     },
-    // 右側砲管 (長 36, 延遲 0.5)
+    // 右側砲管 (長 36, 延遲 0.5，索引 1 先畫於底層)
     {
       length: 36,
       width: BASE_BARREL_WIDTH,
@@ -790,10 +779,27 @@ export const TRIPLET_TANK_DEFINITION: TankDefinition = {
       bulletSizeMultiplier: 0.9,
       bulletLifespanTicks: 75,
     },
+    // 中間長砲管 (長 44, 延遲 0，索引 2 後畫於表層，重疊處維持完整輪廓)
+    {
+      length: 44,
+      width: BASE_BARREL_WIDTH,
+      offsetX: 0,
+      offsetY: 0,
+      angle: 0,
+      spread: 0,
+      fireDelayRatio: 0,
+      reloadMultiplier: 1.0,
+      recoilMultiplier: 0.7,
+      bulletSpeedMultiplier: 1.0,
+      bulletDamageMultiplier: 0.6,
+      bulletPenMultiplier: 0.85,
+      bulletSizeMultiplier: 0.9,
+      bulletLifespanTicks: 75,
+    },
   ],
 };
 
-/** Tier 4: 五連發 (Penta Shot) - 前方五向扇形覆蓋 (0, ±22.5, ±45 度) */
+/** Tier 4: 五連發 (Penta Shot) - 前方五向扇形覆蓋 (外側底層 -> 內側中層 -> 中央表層疊合) */
 export const PENTA_SHOT_TANK_DEFINITION: TankDefinition = {
   id: 'penta_shot',
   name: 'Penta Shot',
@@ -805,15 +811,15 @@ export const PENTA_SHOT_TANK_DEFINITION: TankDefinition = {
   parentClassId: 'triple_shot',
   evolutions: [],
   barrels: [
-    // 中央主管 (最長 42 單位)
+    // 外側左管 (-45 度，長 32，索引 0 最底層)
     {
-      length: 42,
+      length: 32,
       width: BASE_BARREL_WIDTH,
       offsetX: 0,
       offsetY: 0,
-      angle: 0,
+      angle: -Math.PI / 4,
       spread: 0,
-      fireDelayRatio: 0,
+      fireDelayRatio: 0.67,
       reloadMultiplier: 1.0,
       recoilMultiplier: 0.8,
       bulletSpeedMultiplier: 1.0,
@@ -822,7 +828,24 @@ export const PENTA_SHOT_TANK_DEFINITION: TankDefinition = {
       bulletSizeMultiplier: 0.9,
       bulletLifespanTicks: 75,
     },
-    // 內側左管 (-22.5 度，長 38)
+    // 外側右管 (+45 度，長 32，索引 1 最底層)
+    {
+      length: 32,
+      width: BASE_BARREL_WIDTH,
+      offsetX: 0,
+      offsetY: 0,
+      angle: Math.PI / 4,
+      spread: 0,
+      fireDelayRatio: 0.67,
+      reloadMultiplier: 1.0,
+      recoilMultiplier: 0.8,
+      bulletSpeedMultiplier: 1.0,
+      bulletDamageMultiplier: 0.6,
+      bulletPenMultiplier: 0.8,
+      bulletSizeMultiplier: 0.9,
+      bulletLifespanTicks: 75,
+    },
+    // 內側左管 (-22.5 度，長 38，索引 2 中間層)
     {
       length: 38,
       width: BASE_BARREL_WIDTH,
@@ -839,7 +862,7 @@ export const PENTA_SHOT_TANK_DEFINITION: TankDefinition = {
       bulletSizeMultiplier: 0.9,
       bulletLifespanTicks: 75,
     },
-    // 內側右管 (+22.5 度，長 38)
+    // 內側右管 (+22.5 度，長 38，索引 3 中間層)
     {
       length: 38,
       width: BASE_BARREL_WIDTH,
@@ -856,32 +879,15 @@ export const PENTA_SHOT_TANK_DEFINITION: TankDefinition = {
       bulletSizeMultiplier: 0.9,
       bulletLifespanTicks: 75,
     },
-    // 外側左管 (-45 度，長 34)
+    // 中央主管 (最長 44 單位，索引 4 最表層，完整描邊突出)
     {
-      length: 34,
+      length: 44,
       width: BASE_BARREL_WIDTH,
       offsetX: 0,
       offsetY: 0,
-      angle: -Math.PI / 4,
+      angle: 0,
       spread: 0,
-      fireDelayRatio: 0.67,
-      reloadMultiplier: 1.0,
-      recoilMultiplier: 0.8,
-      bulletSpeedMultiplier: 1.0,
-      bulletDamageMultiplier: 0.6,
-      bulletPenMultiplier: 0.8,
-      bulletSizeMultiplier: 0.9,
-      bulletLifespanTicks: 75,
-    },
-    // 外側右管 (+45 度，長 34)
-    {
-      length: 34,
-      width: BASE_BARREL_WIDTH,
-      offsetX: 0,
-      offsetY: 0,
-      angle: Math.PI / 4,
-      spread: 0,
-      fireDelayRatio: 0.67,
+      fireDelayRatio: 0,
       reloadMultiplier: 1.0,
       recoilMultiplier: 0.8,
       bulletSpeedMultiplier: 1.0,
@@ -1069,7 +1075,7 @@ export const RANGER_TANK_DEFINITION: TankDefinition = {
   ],
 };
 
-/** Tier 4: 掠奪者 (Predator) - 三重疊管 (大中小三彈梯次射擊，FOV 1.35) */
+/** Tier 4: 掠奪者 (Predator) - 三重疊管 (大中小三彈梯次射擊，FOV 1.35，38/48/58 階梯鏡筒) */
 export const PREDATOR_TANK_DEFINITION: TankDefinition = {
   id: 'predator',
   name: 'Predator',
@@ -1081,9 +1087,9 @@ export const PREDATOR_TANK_DEFINITION: TankDefinition = {
   parentClassId: 'hunter',
   evolutions: [],
   barrels: [
-    // 底層砲管 (最粗最短，寬 26, 長 42，相位 0，發射巨彈)
+    // 底層砲管 (最粗最短，寬 26, 長 38，相位 0，發射巨彈)
     {
-      length: 42,
+      length: 38,
       width: 26,
       tipWidth: 26,
       offsetX: 0,
@@ -1099,9 +1105,9 @@ export const PREDATOR_TANK_DEFINITION: TankDefinition = {
       bulletSizeMultiplier: 1.0,
       bulletLifespanTicks: 110,
     },
-    // 中層砲管 (寬 20, 長 50，相位 0.2，發射中彈)
+    // 中層砲管 (寬 20, 長 48，相位 0.2，發射中彈)
     {
-      length: 50,
+      length: 48,
       width: 20,
       tipWidth: 20,
       offsetX: 0,
@@ -1138,7 +1144,7 @@ export const PREDATOR_TANK_DEFINITION: TankDefinition = {
   ],
 };
 
-/** Tier 4: 殲滅者 (Annihilator) - 寬 48 巨砲管、超巨型砲彈、火箭推進級後座力 */
+/** Tier 4: 殲滅者 (Annihilator) - 寬 48 長 38 厚重方口身管、超巨型砲彈、火箭推進級後座力 */
 export const ANNIHILATOR_TANK_DEFINITION: TankDefinition = {
   id: 'annihilator',
   name: 'Annihilator',
@@ -1151,8 +1157,8 @@ export const ANNIHILATOR_TANK_DEFINITION: TankDefinition = {
   evolutions: [],
   barrels: [
     {
-      length: 42,
-      width: 48, // 寬達 48 巨型口徑身管
+      length: 38,
+      width: 48, // 寬達 48 巨型口徑身管 (長度 38 形成原版方厚剪影)
       tipWidth: 48,
       offsetX: 0,
       offsetY: 0,
@@ -1170,7 +1176,7 @@ export const ANNIHILATOR_TANK_DEFINITION: TankDefinition = {
   ],
 };
 
-/** Tier 4: 推進者 (Booster) - 主砲 + 雙排 4 根後置噴射管 (全遊戲最高機動衝撞) */
+/** Tier 4: 推進者 (Booster) - 主砲 + 雙排 4 根後置噴射管 (外側底層 -> 內側表層疊管) */
 export const BOOSTER_TANK_DEFINITION: TankDefinition = {
   id: 'booster',
   name: 'Booster',
@@ -1182,58 +1188,7 @@ export const BOOSTER_TANK_DEFINITION: TankDefinition = {
   parentClassId: 'tri_angle',
   evolutions: [],
   barrels: [
-    // 前主砲
-    {
-      length: BASE_BARREL_LENGTH,
-      width: BASE_BARREL_WIDTH,
-      offsetX: 0,
-      offsetY: 0,
-      angle: 0,
-      spread: 0,
-      fireDelayRatio: 0,
-      reloadMultiplier: 1.0,
-      recoilMultiplier: 1.0,
-      bulletSpeedMultiplier: 1.0,
-      bulletDamageMultiplier: 1.0,
-      bulletPenMultiplier: 1.0,
-      bulletSizeMultiplier: 1.0,
-      bulletLifespanTicks: 75,
-    },
-    // 內側左噴射管 (145 度, 長 34, 相位 0)
-    {
-      length: 34,
-      width: BASE_BARREL_WIDTH,
-      offsetX: 0,
-      offsetY: 0,
-      angle: (145 * Math.PI) / 180,
-      spread: 0,
-      fireDelayRatio: 0,
-      reloadMultiplier: 1.0,
-      recoilMultiplier: 1.5,
-      bulletSpeedMultiplier: 1.0,
-      bulletDamageMultiplier: 0.35,
-      bulletPenMultiplier: 0.35,
-      bulletSizeMultiplier: 0.8,
-      bulletLifespanTicks: 55,
-    },
-    // 內側右噴射管 (-145 度, 長 34, 相位 0)
-    {
-      length: 34,
-      width: BASE_BARREL_WIDTH,
-      offsetX: 0,
-      offsetY: 0,
-      angle: -(145 * Math.PI) / 180,
-      spread: 0,
-      fireDelayRatio: 0,
-      reloadMultiplier: 1.0,
-      recoilMultiplier: 1.5,
-      bulletSpeedMultiplier: 1.0,
-      bulletDamageMultiplier: 0.35,
-      bulletPenMultiplier: 0.35,
-      bulletSizeMultiplier: 0.8,
-      bulletLifespanTicks: 55,
-    },
-    // 外側左噴射管 (155 度, 長 28, 相位 0.5 交替)
+    // 外側左噴射管 (155 度, 長 28, 相位 0.5 交替，索引 0 最底層)
     {
       length: 28,
       width: BASE_BARREL_WIDTH,
@@ -1250,7 +1205,7 @@ export const BOOSTER_TANK_DEFINITION: TankDefinition = {
       bulletSizeMultiplier: 0.8,
       bulletLifespanTicks: 55,
     },
-    // 外側右噴射管 (-155 度, 長 28, 相位 0.5 交替)
+    // 外側右噴射管 (-155 度, 長 28, 相位 0.5 交替，索引 1 最底層)
     {
       length: 28,
       width: BASE_BARREL_WIDTH,
@@ -1266,6 +1221,57 @@ export const BOOSTER_TANK_DEFINITION: TankDefinition = {
       bulletPenMultiplier: 0.35,
       bulletSizeMultiplier: 0.8,
       bulletLifespanTicks: 55,
+    },
+    // 內側左噴射管 (145 度, 長 34, 相位 0，索引 2 中間表層覆蓋外側)
+    {
+      length: 34,
+      width: BASE_BARREL_WIDTH,
+      offsetX: 0,
+      offsetY: 0,
+      angle: (145 * Math.PI) / 180,
+      spread: 0,
+      fireDelayRatio: 0,
+      reloadMultiplier: 1.0,
+      recoilMultiplier: 1.5,
+      bulletSpeedMultiplier: 1.0,
+      bulletDamageMultiplier: 0.35,
+      bulletPenMultiplier: 0.35,
+      bulletSizeMultiplier: 0.8,
+      bulletLifespanTicks: 55,
+    },
+    // 內側右噴射管 (-145 度, 長 34, 相位 0，索引 3 中間表層覆蓋外側)
+    {
+      length: 34,
+      width: BASE_BARREL_WIDTH,
+      offsetX: 0,
+      offsetY: 0,
+      angle: -(145 * Math.PI) / 180,
+      spread: 0,
+      fireDelayRatio: 0,
+      reloadMultiplier: 1.0,
+      recoilMultiplier: 1.5,
+      bulletSpeedMultiplier: 1.0,
+      bulletDamageMultiplier: 0.35,
+      bulletPenMultiplier: 0.35,
+      bulletSizeMultiplier: 0.8,
+      bulletLifespanTicks: 55,
+    },
+    // 前主砲 (索引 4，前方突出)
+    {
+      length: BASE_BARREL_LENGTH,
+      width: BASE_BARREL_WIDTH,
+      offsetX: 0,
+      offsetY: 0,
+      angle: 0,
+      spread: 0,
+      fireDelayRatio: 0,
+      reloadMultiplier: 1.0,
+      recoilMultiplier: 1.0,
+      bulletSpeedMultiplier: 1.0,
+      bulletDamageMultiplier: 1.0,
+      bulletPenMultiplier: 1.0,
+      bulletSizeMultiplier: 1.0,
+      bulletLifespanTicks: 75,
     },
   ],
 };
