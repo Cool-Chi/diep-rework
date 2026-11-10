@@ -56,6 +56,14 @@ export const BASE_BARREL_WIDTH = 18;
 export const CAMERA_BASE_SCALE = 1.0;
 
 /**
+ * 等級對相機視野 FOV 的放大縮放係數
+ * 查證來源：https://diepio.fandom.com/wiki/Levels
+ * 原文："The Field of View increases as you level up, allowing you to see more of the map"
+ * TODO(tune): 未查證具體係數，設為每級 +0.005 (Lv 30 增加約 14.5% FOV)
+ */
+export const FOV_LEVEL_SCALING = 0.005;
+
+/**
  * 相機平滑插值係數 k (用於 1 - exp(-k * dt) 與幀率無關的平滑跟隨)
  * TODO(tune): 未查證，依跟隨手感調整
  */
@@ -70,6 +78,18 @@ export const CAMERA_SMOOTH_K = 12.0;
  * TODO(tune): 未查證（原版未公開底層加速度）
  */
 export const TANK_MOVE_ACCEL = 0.95;
+
+/**
+ * 移動速度屬性每點加成倍率
+ * TODO(tune): 未查證（原版 Wiki: Movement speed is passively lowered as your tank levels up）
+ */
+export const MOVE_SPEED_PER_POINT = 0.075;
+
+/**
+ * 等級對移動速度的懲罰指數係數
+ * TODO(tune): 未查證
+ */
+export const MOVE_SPEED_LEVEL_PENALTY = 0.5;
 
 /**
  * 每 tick 速度阻尼乘數 (0 < DAMPING < 1)
@@ -103,6 +123,27 @@ export const LV1_TERMINAL_SPEED =
  * 換算：3 秒 * SIM_TICK_RATE = 75 ticks
  */
 export const BULLET_LIFESPAN_TICKS = 75;
+
+/**
+ * 觸發加速生命回復 (Hyper Regen) 所需未受傷之模擬 tick 數
+ * 查證來源：https://diepio.fandom.com/wiki/Health_Regen
+ * 原文："With 0 points invested into Health Regen, a tank will not naturally regenerate any health until it has gone 30 seconds without taking damage."
+ * 換算：30 秒 * SIM_TICK_RATE = 750 ticks
+ */
+export const HYPER_REGEN_TICKS = 30 * SIM_TICK_RATE;
+
+/**
+ * 加速生命回復 (Hyper Regen) 每秒回復生命百分比
+ * TODO(tune): 未查證，原版迅速回滿生命（設 0.15 即每秒回復 15% 最大生命，約 6.7 秒回滿）
+ */
+export const HYPER_REGEN_PERCENT_PER_SEC = 0.15;
+
+/**
+ * 擊殺坦克獲得其分數之獎勵比例
+ * 查證來源：https://diepio.fandom.com/wiki/Score
+ * TODO(tune): 未查證，MVP 設為 1.0 (受害者累積分數的 100%)
+ */
+export const KILL_REWARD_RATIO = 1.0;
 
 /**
  * 子彈預設基礎半徑（世界單位）

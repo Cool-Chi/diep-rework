@@ -1,4 +1,4 @@
-import { BASE_TANK_RADIUS } from '../config/constants';
+import { BASE_BULLET_SPEED, BASE_TANK_RADIUS } from '../config/constants';
 import {
   BASIC_TANK_DEFINITION,
   type TankDefinition,
@@ -29,12 +29,26 @@ export class Tank {
   public radius: number;
   public rotation = 0; // 砲管/本體朝向（弧度）
 
-  // 戰鬥屬性 (M2 基準)
+  // 等級與技能點狀態
+  public level = 1;
+  public score = 0;
+  public statPoints = 0;
+  public readonly statLevels = new Uint8Array(8); // 8 項屬性加點 (0 ~ 7)
+  public lastDamageTick = 0; // 上次受傷模擬 tick 編號（用於 30 秒加速回血）
+
+  // 衍生戰鬥屬性 (由 recomputeDerivedStats 統一重算與快取)
   public hp = 50;
   public maxHp = 50;
+  public regenPerTick = 0; // 基礎每 tick 自然回血量
   public bodyDamage = 20; // 撞擊傷害基準 (對形狀: (p=0: (0+5)*4))
   public bodyDamageToTank = 30; // 撞擊傷害基準 (對坦克: (p=0: (0+5)*6))
   public bodyDamageToBullet = 5; // 撞擊傷害基準 (對子彈: (p=0: p+5))
+  public bulletHp = 2; // 子彈生命值 (穿透力)
+  public bulletDamage = 7; // 子彈殺傷力
+  public reloadTicks = 15; // 射擊裝填間隔 ticks
+  public bulletSpeed: number = BASE_BULLET_SPEED; // 子彈初速
+  public moveAccelScale = 1.0; // 移動加速度縮放倍率
+
   public reloadCooldown = 0; // 當前剩餘裝填冷卻 tick 數
   public barrelCooldowns: Int32Array; // 各砲管獨立冷卻
 
@@ -80,6 +94,17 @@ export class Tank {
     for (let b = 0; b < this.barrelCooldowns.length; b++) {
       this.barrelCooldowns[b] = 0;
     }
+  }
+
+  /**
+   * 重設等級與屬性點數為初始狀態 (Lv 1)
+   */
+  public resetStats(): void {
+    this.level = 1;
+    this.score = 0;
+    this.statPoints = 0;
+    this.statLevels.fill(0);
+    this.lastDamageTick = 0;
   }
 
   /**
