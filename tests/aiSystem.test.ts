@@ -208,6 +208,75 @@ describe('Milestone 5: AISystem (Tactical Bot Decision & Combat)', () => {
     expect(bot.aiTargetId).toBe(-1);
   });
 
+  it('remains stably in farming mode when low HP with no nearby threats across 100 ticks (no ping-pong deadlock)', () => {
+    const aiSystem = new AISystem();
+    const bot = new Tank(1001, 1000, 1000);
+    bot.isAi = true;
+    bot.active = true;
+    bot.maxHp = 100;
+    bot.hp = 20; // 20% (< 35% 殘血)
+    bot.aiState = 'farming';
+
+    // 附近有形狀可農
+    const shape = new Shape();
+    shape.init(1, 'square', 1200, 1000, 0, 0, 10, 20, 10, 20);
+    const shapes = [shape];
+
+    // 無近距離威脅 (敵人在地圖遠端 3500, 3500)
+    const distantEnemy = new Tank(1, 3500, 3500);
+    distantEnemy.active = true;
+    const allTanks = [distantEnemy, bot];
+    const bulletPool = new ObjectPool<Bullet>(16, () => new Bullet());
+
+    // 連續執行 100 個 ticks，驗證狀態維持 100% 穩定，絕不發生單 tick 乒乓抽動
+    for (let t = 1; t <= 100; t++) {
+      aiSystem.update([bot], shapes, allTanks, bulletPool, t);
+      expect(bot.aiState).toBe('farming');
+      expect(bot.input.shooting).toBe(true);
+      expect(bot.input.aimX).toBe(1200);
+      expect(bot.input.aimY).toBe(1000);
+    }
+  });
+
+  it('retreats when low HP with active threat, and smoothly returns to farming when threat clears', () => {
+    const aiSystem = new AISystem();
+    const bot = new Tank(1001, 1000, 1000);
+    bot.isAi = true;
+    bot.active = true;
+    bot.maxHp = 100;
+    bot.hp = 25; // 25% (< 35%)
+    bot.aiState = 'farming';
+
+    const shape = new Shape();
+    shape.init(1, 'square', 1100, 1000, 0, 0, 10, 20, 10, 20);
+    const shapes = [shape];
+
+    // 敵人出現在 1300, 1000 (距離 300 < PERCEPTION_RADIUS 550)
+    const enemy = new Tank(1, 1300, 1000);
+    enemy.active = true;
+    const allTanks = [enemy, bot];
+    const bulletPool = new ObjectPool<Bullet>(16, () => new Bullet());
+
+    // 1. 遭遇近身威脅，殘血進入 retreating
+    aiSystem.update([bot], shapes, allTanks, bulletPool, 1);
+    expect(bot.aiState).toBe('retreating');
+    expect(bot.input.shooting).toBe(true); // 火箭反衝開火
+    expect(bot.input.moveX).toBeLessThan(0); // 遠離敵人
+
+    // 2. 敵人遠離至 1800, 1000 (距離 800 > THREAT_ESCAPE_RADIUS 700)
+    enemy.x = 1800;
+    aiSystem.update([bot], shapes, allTanks, bulletPool, 2);
+    expect(bot.aiState).toBe('farming');
+    expect(bot.input.shooting).toBe(true); // 立即農怪，不盲目飄移停火
+
+    // 3. 後續 50 ticks 穩定保持 farming
+    for (let t = 3; t <= 50; t++) {
+      aiSystem.update([bot], shapes, allTanks, bulletPool, t);
+      expect(bot.aiState).toBe('farming');
+      expect(bot.input.shooting).toBe(true);
+    }
+  });
+
   it('dynamically retargets to immediate closer threats during combat', () => {
     const aiSystem = new AISystem();
     const bot = new Tank(1001, 1000, 1000);

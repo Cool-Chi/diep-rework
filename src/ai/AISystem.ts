@@ -56,7 +56,7 @@ export class AISystem {
       // 3. 依狀態計算移動意圖向量與瞄準目標
       switch (bot.aiState) {
         case 'retreating':
-          this.executeRetreat(bot, allTanks);
+          this.executeRetreat(bot, allTanks, shapes);
           break;
         case 'engaging':
           this.executeCombat(bot, allTanks, bulletPool);
@@ -80,31 +80,42 @@ export class AISystem {
   private evaluateState(bot: Tank, allTanks: Tank[]): void {
     const hpRatio = bot.hp / bot.maxHp;
 
-    // A. 殘血危機判斷 (HP < 35%) -> 進入 RETREATING
+    // A. 殘血危機判斷 (HP < 35%)：僅在索敵感知半徑內確實存在敵對坦克威脅時才進入 RETREATING
     if (hpRatio < 0.35 && bot.aiState !== 'retreating') {
-      bot.aiState = 'retreating';
-      bot.aiStateTimer = 0;
-      return;
+      const threat = this.findNearestEnemyTank(
+        bot,
+        allTanks,
+        PERCEPTION_RADIUS,
+      );
+      if (threat) {
+        bot.aiState = 'retreating';
+        bot.aiStateTimer = 0;
+        bot.aiTargetId = threat.id;
+        return;
+      }
+      // 若周遭無任何敵方坦克威脅，維持 farming 打怪升等回血，絕不觸發無威脅殘血漂移
     }
 
-    // B. 逃逸復原判斷 (至少維持 MIN_RETREAT_TICKS 且威脅已遠離或 HP 回復至 60%)
+    // B. 逃逸復原判斷 (若威脅已遠離超出 THREAT_ESCAPE_RADIUS 或 HP 回復至 60%)
     if (bot.aiState === 'retreating') {
-      if (bot.aiStateTimer >= MIN_RETREAT_TICKS) {
-        const nearestEnemy = this.findNearestEnemyTank(
-          bot,
-          allTanks,
-          THREAT_ESCAPE_RADIUS,
-        );
-        if (!nearestEnemy) {
-          // 周圍已無敵對威脅，立即重回 FARMING 發育邊農邊回血，徹底解除殭屍漂移鎖
-          bot.aiState = 'farming';
-          bot.aiStateTimer = 0;
-          bot.aiTargetId = -1;
-        } else if (hpRatio >= 0.6) {
-          // 敵方仍在警戒區但自身血量已回復至 60% 以上，轉為反打
+      const nearestEnemy = this.findNearestEnemyTank(
+        bot,
+        allTanks,
+        THREAT_ESCAPE_RADIUS,
+      );
+      if (!nearestEnemy) {
+        // 周圍已無敵對威脅（具備 550 ↔ 700 滯後緩衝），立即重回 FARMING 發育打怪，徹底解除無威脅漂移鎖
+        bot.aiState = 'farming';
+        bot.aiStateTimer = 0;
+        bot.aiTargetId = -1;
+        bot.aiTargetShapeId = -1;
+        bot.aiTargetStickinessTimer = 0;
+      } else {
+        bot.aiTargetId = nearestEnemy.id;
+        // 敵方仍在警戒區內，需維持逃逸滿 MIN_RETREAT_TICKS 且血量回復至 60% 以上才轉為反打
+        if (bot.aiStateTimer >= MIN_RETREAT_TICKS && hpRatio >= 0.6) {
           bot.aiState = 'engaging';
           bot.aiStateTimer = 0;
-          bot.aiTargetId = nearestEnemy.id;
         }
       }
       return;
@@ -117,7 +128,7 @@ export class AISystem {
       const levelGap = threat.level - bot.level;
       if (levelGap >= 12 && bot.level < 15) {
         const d = this.dist(bot, threat);
-        if (d < 380 || hpRatio < 0.8) {
+        if (d < 450 || hpRatio < 0.8) {
           bot.aiState = 'retreating';
           bot.aiStateTimer = 0;
           bot.aiTargetId = threat.id;
@@ -137,6 +148,7 @@ export class AISystem {
           bot.aiState = 'farming';
           bot.aiStateTimer = 0;
           bot.aiTargetId = -1;
+          bot.aiTargetShapeId = -1;
         }
       }
     }
@@ -148,13 +160,13 @@ export class AISystem {
   private executeFarming(bot: Tank, shapes: Shape[]): void {
     let shape: Shape | null = null;
 
-    // 優先沿用當前鎖定之形狀 (45 ticks 記憶鎖定，避免高頻抽搐切換)
+    // 優先沿用當前鎖定之形狀 (放寬至 1300 單位，最長 125 ticks = 5 秒記憶鎖定，避免高頻抽搐切換)
     if (bot.aiTargetShapeId >= 0) {
       const existing = this.findShapeById(bot.aiTargetShapeId, shapes);
       if (
         existing?.active &&
-        this.distToShape(bot, existing) <= 750 &&
-        bot.aiTargetStickinessTimer < 45
+        this.distToShape(bot, existing) <= 1300 &&
+        bot.aiTargetStickinessTimer < 125
       ) {
         shape = existing;
         bot.aiTargetStickinessTimer++;
@@ -166,6 +178,10 @@ export class AISystem {
       if (!shape) {
         // 若 600 範圍內無形狀，擴展視野至 1200 單位主動搜尋靠攏
         shape = this.findNearestShape(bot, shapes, 1200);
+      }
+      if (!shape) {
+        // 若 1200 範圍內仍無形狀，全圖搜尋最近形狀靠攏
+        shape = this.findNearestShape(bot, shapes, MAP_SIZE * 1.5);
       }
       if (shape) {
         bot.aiTargetShapeId = shape.id;
@@ -275,9 +291,9 @@ export class AISystem {
   }
 
   /**
-   * 執行 RETREATING 狀態（背向狂奔 + 砲管後座力火箭反衝推進）
+   * 執行 RETREATING 狀態（背向狂奔 + 砲管後座力火箭反衝推進；無威脅時委派農怪發育，杜絕停火飄移）
    */
-  private executeRetreat(bot: Tank, allTanks: Tank[]): void {
+  private executeRetreat(bot: Tank, allTanks: Tank[], shapes: Shape[]): void {
     const threat = this.findNearestEnemyTank(
       bot,
       allTanks,
@@ -302,14 +318,8 @@ export class AISystem {
       }
     }
 
-    // 無特定威脅時沿巡邏方向脫離危險區，停火並自然回血
-    const angle =
-      (bot.id * 2.3 + Math.floor(bot.aiStateTimer / 120)) % (Math.PI * 2);
-    bot.input.moveX = Math.cos(angle) * 0.7;
-    bot.input.moveY = Math.sin(angle) * 0.7;
-    bot.input.aimX = bot.x + Math.cos(angle) * 100;
-    bot.input.aimY = bot.y + Math.sin(angle) * 100;
-    bot.input.shooting = false;
+    // 若周遭已無威脅，直接委派執行農怪發育，絕不盲目停火飄移
+    this.executeFarming(bot, shapes);
   }
 
   /**
