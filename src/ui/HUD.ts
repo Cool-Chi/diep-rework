@@ -57,6 +57,14 @@ export class HUD {
   }
 
   /**
+   * 處理滑鼠移動事件 (卡牌懸停與靠近喚出)
+   */
+  public handlePointerMove(screenX: number, screenY: number): void {
+    if (!this.visible) return;
+    this.evolutionPanel.handlePointerMove(screenX, screenY);
+  }
+
+  /**
    * 處理滑鼠按下事件 (若點擊在轉職卡牌或屬性面板的 + 上，觸發對應行為)
    */
   public handlePointerDown(screenX: number, screenY: number): boolean {
@@ -80,6 +88,7 @@ export class HUD {
     if (!this.visible) return;
 
     this.statPanel.update(playerTank);
+    this.evolutionPanel.update(dtSeconds);
     this.scoreBar.update(playerTank, dtSeconds);
     this.miniMap.update(playerTank, alpha, camera);
   }

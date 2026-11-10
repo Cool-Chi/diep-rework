@@ -75,4 +75,50 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
     expect(rear.angle).toBe(Math.PI);
     expect(rear.length).toBeLessThan(front.length);
   });
+
+  it('verifies all 4 Tier 3 tanks require Level 30 and match evolution hierarchy', () => {
+    const tier3Ids: TankClassId[] = [
+      'triple_shot',
+      'assassin',
+      'destroyer',
+      'twin_flank',
+    ];
+
+    for (const id of tier3Ids) {
+      const def = TANKS_CONFIG[id];
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(3);
+      expect(def.requiredLevel).toBe(30);
+      expect(def.evolutions).toHaveLength(0);
+    }
+
+    // 驗證進化鏈
+    expect(TWIN_TANK_DEFINITION.evolutions).toEqual(['triple_shot']);
+    expect(SNIPER_TANK_DEFINITION.evolutions).toEqual(['assassin']);
+    expect(MACHINE_GUN_TANK_DEFINITION.evolutions).toEqual(['destroyer']);
+    expect(FLANK_GUARD_TANK_DEFINITION.evolutions).toEqual(['twin_flank']);
+  });
+
+  it('configures Tier 3 combat specs: Assassin FOV 1.25 and Destroyer width 36 & recoil 3.5', () => {
+    const assassin = TANKS_CONFIG.assassin;
+    expect(assassin.fovMultiplier).toBe(1.25);
+    expect(assassin.barrels[0].length).toBe(60);
+    expect(assassin.barrels[0].bulletSpeedMultiplier).toBe(1.6);
+
+    const destroyer = TANKS_CONFIG.destroyer;
+    expect(destroyer.barrels[0].width).toBe(36);
+    expect(destroyer.barrels[0].recoilMultiplier).toBe(3.5);
+    expect(destroyer.barrels[0].bulletSizeMultiplier).toBe(2.0);
+    expect(destroyer.barrels[0].bulletDamageMultiplier).toBe(3.0);
+
+    const tripleShot = TANKS_CONFIG.triple_shot;
+    expect(tripleShot.barrels).toHaveLength(3);
+    const angles = tripleShot.barrels.map((b) => b.angle);
+    expect(angles).toContain(0);
+    expect(angles).toContain(-Math.PI / 4);
+    expect(angles).toContain(Math.PI / 4);
+
+    const twinFlank = TANKS_CONFIG.twin_flank;
+    expect(twinFlank.barrels).toHaveLength(4);
+  });
 });

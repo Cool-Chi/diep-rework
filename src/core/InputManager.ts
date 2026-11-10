@@ -20,6 +20,8 @@ export class InputManager {
   public mouseScreenX = 0;
   public mouseScreenY = 0;
   public isMouseDown = false;
+  public onPointerMove: ((screenX: number, screenY: number) => void) | null =
+    null;
 
   private canvas: HTMLCanvasElement | null = null;
   private onKeyDownBound: (e: Event) => void;
@@ -259,6 +261,7 @@ export class InputManager {
   private handlePointerMove(e: PointerEvent): void {
     this.mouseScreenX = e.clientX;
     this.mouseScreenY = e.clientY;
+    this.onPointerMove?.(e.clientX, e.clientY);
   }
 
   private handlePointerDown(e: PointerEvent): void {

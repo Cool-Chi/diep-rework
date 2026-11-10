@@ -81,6 +81,8 @@ export class Game {
     this.levelingSystem = new LevelingSystem(this.eventBus, [this.playerTank]);
     this.inputManager.eventBus = this.eventBus;
     this.inputManager.isOverUi = (x, y) => this.hud.isOverUi(x, y);
+    this.inputManager.onPointerMove = (x, y) =>
+      this.hud.handlePointerMove(x, y);
 
     this.eventBus.onStatUpgradeRequested((statIndex) => {
       this.levelingSystem.spendStatPoint(

@@ -151,4 +151,71 @@ describe('Milestone 4a: Evolution & Class Specialization', () => {
 
     panel.destroy();
   });
+
+  it('triggers Tier 3 evolutionAvailable event when Tier 2 Tank reaches Lv 30 (6184 score)', () => {
+    const eventBus = new EventBus();
+    const tank = new Tank(1, 100, 100);
+    const leveling = new LevelingSystem(eventBus, [tank]);
+
+    let availableCandidates: string[] = [];
+    eventBus.onEvolutionAvailable((_tankId, candidates) => {
+      availableCandidates = [...candidates];
+    });
+
+    // 1. 先升至 Lv 15 並進化為 Sniper
+    leveling.addScore(tank, 787, eventBus);
+    leveling.evolveTank(tank, 'sniper', eventBus);
+    expect(tank.definition.id).toBe('sniper');
+    expect(tank.definition.tier).toBe(2);
+
+    // 2. 升至 Lv 29 (5525 分)，未滿 30，不觸發 Tier 3 進化
+    leveling.addScore(tank, 5525 - 787, eventBus);
+    expect(tank.level).toBe(29);
+    availableCandidates = [];
+    leveling.checkEvolution(tank, eventBus);
+    expect(availableCandidates).toHaveLength(0);
+
+    // 3. 升至 Lv 30 (累計 6184 分)，觸發 Assassin 進化
+    leveling.addScore(tank, 6184 - 5525, eventBus);
+    expect(tank.level).toBe(30);
+    expect(availableCandidates).toEqual(['assassin']);
+
+    // 4. 進化為 Assassin
+    const success = leveling.evolveTank(tank, 'assassin', eventBus);
+    expect(success).toBe(true);
+    expect(tank.definition.id).toBe('assassin');
+    expect(tank.definition.tier).toBe(3);
+    expect(tank.definition.fovMultiplier).toBe(1.25);
+  });
+
+  it('verifies EvolutionPanel Ignore button hides panel and auto-reopens on mouse approach', () => {
+    const eventBus = new EventBus();
+    const panel = new EvolutionPanel(eventBus);
+    panel.resize(1.0);
+
+    panel.show(['twin', 'sniper', 'machine_gun', 'flank_guard']);
+    expect(panel.visible).toBe(true);
+    expect(panel.isIgnored).toBe(false);
+
+    // 點擊 Ignore 按鈕 (位置約在 Y: 16 + 76*2 + 8 + 8 = 184 附近)
+    // 依 layout: screenX=16, screenY=16, panel cards = 160x160, ignoreBtn localY = 160 + 8 = 168.
+    // 螢幕座標 = 16 + 168 + 10 = 194.
+    const clickHandled = panel.handlePointerDown(40, 194);
+    expect(clickHandled).toBe(true);
+    expect(panel.isIgnored).toBe(true);
+    expect(panel.containsPoint(40, 40)).toBe(false); // 被忽略時不阻擋射擊
+
+    // 冷卻時間內靠近不重開
+    panel.handlePointerMove(50, 50);
+    expect(panel.isIgnored).toBe(true);
+
+    // 經過 2.1 秒冷卻結束
+    panel.update(2.1);
+    // 滑鼠再次靠近左上角 (50, 50)
+    panel.handlePointerMove(50, 50);
+    expect(panel.isIgnored).toBe(false);
+    expect(panel.visible).toBe(true);
+
+    panel.destroy();
+  });
 });

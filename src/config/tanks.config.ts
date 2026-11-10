@@ -26,7 +26,11 @@ export type TankClassId =
   | 'twin'
   | 'sniper'
   | 'machine_gun'
-  | 'flank_guard';
+  | 'flank_guard'
+  | 'triple_shot'
+  | 'assassin'
+  | 'destroyer'
+  | 'twin_flank';
 
 export interface TankDefinition {
   id: TankClassId;
@@ -36,6 +40,7 @@ export interface TankDefinition {
   bodyRadius: number;
   barrels: BarrelConfig[];
   fovMultiplier: number;
+  cardColor: number; // 卡牌專屬主題色
   parentClassId?: TankClassId;
   evolutions: TankClassId[];
 }
@@ -48,6 +53,7 @@ export const BASIC_TANK_DEFINITION: TankDefinition = {
   requiredLevel: 1,
   bodyRadius: BASE_TANK_RADIUS,
   fovMultiplier: 1.0,
+  cardColor: 0x00b2e1,
   evolutions: ['twin', 'sniper', 'machine_gun', 'flank_guard'],
   barrels: [
     {
@@ -76,8 +82,9 @@ export const TWIN_TANK_DEFINITION: TankDefinition = {
   requiredLevel: 15,
   bodyRadius: BASE_TANK_RADIUS,
   fovMultiplier: 1.0,
+  cardColor: 0xffe869, // 黃色系
   parentClassId: 'basic',
-  evolutions: [], // M4b 延伸為 triple_shot
+  evolutions: ['triple_shot'], // M4b 延伸為 triple_shot
   barrels: [
     {
       length: BASE_BARREL_LENGTH,
@@ -120,8 +127,9 @@ export const SNIPER_TANK_DEFINITION: TankDefinition = {
   requiredLevel: 15,
   bodyRadius: BASE_TANK_RADIUS,
   fovMultiplier: 1.111, // 原版 Wiki 視野 +11.1%
+  cardColor: 0x00b2e1, // 藍色系
   parentClassId: 'basic',
-  evolutions: [], // M4b 延伸為 assassin
+  evolutions: ['assassin'], // M4b 延伸為 assassin
   barrels: [
     {
       length: 50, // 砲管延伸至 50 單位
@@ -149,8 +157,9 @@ export const MACHINE_GUN_TANK_DEFINITION: TankDefinition = {
   requiredLevel: 15,
   bodyRadius: BASE_TANK_RADIUS,
   fovMultiplier: 1.0,
+  cardColor: 0x00e16e, // 綠色系
   parentClassId: 'basic',
-  evolutions: [], // M4b 延伸為 destroyer
+  evolutions: ['destroyer'], // M4b 延伸為 destroyer
   barrels: [
     {
       length: 42, // 原版機槍長度約 42 單位
@@ -179,8 +188,9 @@ export const FLANK_GUARD_TANK_DEFINITION: TankDefinition = {
   requiredLevel: 15,
   bodyRadius: BASE_TANK_RADIUS,
   fovMultiplier: 1.0,
+  cardColor: 0xbf7ff5, // 紫色系
   parentClassId: 'basic',
-  evolutions: [], // M4b 延伸為 twin_flank
+  evolutions: ['twin_flank'], // M4b 延伸為 twin_flank
   barrels: [
     {
       length: BASE_BARREL_LENGTH,
@@ -215,10 +225,212 @@ export const FLANK_GUARD_TANK_DEFINITION: TankDefinition = {
   ],
 };
 
+/** Tier 3: 三連發 (Triple Shot) - 正前方與兩側 45 度三向射擊 */
+export const TRIPLE_SHOT_TANK_DEFINITION: TankDefinition = {
+  id: 'triple_shot',
+  name: 'Triple Shot',
+  tier: 3,
+  requiredLevel: 30,
+  bodyRadius: BASE_TANK_RADIUS,
+  fovMultiplier: 1.0,
+  cardColor: 0xffe869, // 黃色系
+  parentClassId: 'twin',
+  evolutions: [],
+  barrels: [
+    {
+      length: BASE_BARREL_LENGTH,
+      width: BASE_BARREL_WIDTH,
+      offsetX: 0,
+      offsetY: 0,
+      angle: 0,
+      spread: 0,
+      fireDelayRatio: 0,
+      reloadMultiplier: 1.0,
+      recoilMultiplier: 0.7,
+      bulletSpeedMultiplier: 1.0,
+      bulletDamageMultiplier: 0.7,
+      bulletPenMultiplier: 0.8,
+      bulletSizeMultiplier: 1.0,
+    },
+    {
+      length: BASE_BARREL_LENGTH,
+      width: BASE_BARREL_WIDTH,
+      offsetX: 0,
+      offsetY: 0,
+      angle: -Math.PI / 4, // -45 度
+      spread: 0,
+      fireDelayRatio: 0,
+      reloadMultiplier: 1.0,
+      recoilMultiplier: 0.7,
+      bulletSpeedMultiplier: 1.0,
+      bulletDamageMultiplier: 0.7,
+      bulletPenMultiplier: 0.8,
+      bulletSizeMultiplier: 1.0,
+    },
+    {
+      length: BASE_BARREL_LENGTH,
+      width: BASE_BARREL_WIDTH,
+      offsetX: 0,
+      offsetY: 0,
+      angle: Math.PI / 4, // +45 度
+      spread: 0,
+      fireDelayRatio: 0,
+      reloadMultiplier: 1.0,
+      recoilMultiplier: 0.7,
+      bulletSpeedMultiplier: 1.0,
+      bulletDamageMultiplier: 0.7,
+      bulletPenMultiplier: 0.8,
+      bulletSizeMultiplier: 1.0,
+    },
+  ],
+};
+
+/** Tier 3: 暗殺者 (Assassin) - 超長砲管、極限初速、超遠視野 (FOV 1.25) */
+export const ASSASSIN_TANK_DEFINITION: TankDefinition = {
+  id: 'assassin',
+  name: 'Assassin',
+  tier: 3,
+  requiredLevel: 30,
+  bodyRadius: BASE_TANK_RADIUS,
+  fovMultiplier: 1.25, // 原版 Wiki 視野 +25%
+  cardColor: 0x00b2e1, // 藍色系
+  parentClassId: 'sniper',
+  evolutions: [],
+  barrels: [
+    {
+      length: 60, // 砲管延伸至 60 單位
+      width: BASE_BARREL_WIDTH,
+      offsetX: 0,
+      offsetY: 0,
+      angle: 0,
+      spread: 0,
+      fireDelayRatio: 0,
+      reloadMultiplier: 1.67,
+      recoilMultiplier: 1.25,
+      bulletSpeedMultiplier: 1.6, // 子彈速度 1.6x
+      bulletDamageMultiplier: 1.3,
+      bulletPenMultiplier: 1.0,
+      bulletSizeMultiplier: 1.0,
+    },
+  ],
+};
+
+/** Tier 3: 毀滅者 (Destroyer) - 巨型重砲口 (寬度 36)、巨砲彈、強大後座力 */
+export const DESTROYER_TANK_DEFINITION: TankDefinition = {
+  id: 'destroyer',
+  name: 'Destroyer',
+  tier: 3,
+  requiredLevel: 30,
+  bodyRadius: BASE_TANK_RADIUS,
+  fovMultiplier: 1.0,
+  cardColor: 0x00e16e, // 綠色系
+  parentClassId: 'machine_gun',
+  evolutions: [],
+  barrels: [
+    {
+      length: 42,
+      width: 36, // 兩倍寬巨型砲管
+      tipWidth: 36,
+      offsetX: 0,
+      offsetY: 0,
+      angle: 0,
+      spread: 0,
+      fireDelayRatio: 0,
+      reloadMultiplier: 3.0, // 裝填時間 3.0x (高威力慢速)
+      recoilMultiplier: 3.5, // 3.5x 強烈後座力 (火箭推進)
+      bulletSpeedMultiplier: 0.85,
+      bulletDamageMultiplier: 3.0, // 3x 毀滅殺傷力
+      bulletPenMultiplier: 2.5, // 2.5x 巨彈穿透
+      bulletSizeMultiplier: 2.0, // 2x 巨型砲彈
+    },
+  ],
+};
+
+/** Tier 3: 雙向側衛 (Twin Flank) - 前後雙向各 2 管交替射擊 (共 4 管) */
+export const TWIN_FLANK_TANK_DEFINITION: TankDefinition = {
+  id: 'twin_flank',
+  name: 'Twin Flank',
+  tier: 3,
+  requiredLevel: 30,
+  bodyRadius: BASE_TANK_RADIUS,
+  fovMultiplier: 1.0,
+  cardColor: 0xbf7ff5, // 紫色系
+  parentClassId: 'flank_guard',
+  evolutions: [],
+  barrels: [
+    // 前方雙管
+    {
+      length: BASE_BARREL_LENGTH,
+      width: BASE_BARREL_WIDTH,
+      offsetX: 0,
+      offsetY: -12,
+      angle: 0,
+      spread: 0,
+      fireDelayRatio: 0,
+      reloadMultiplier: 1.0,
+      recoilMultiplier: 0.6,
+      bulletSpeedMultiplier: 1.0,
+      bulletDamageMultiplier: 0.65,
+      bulletPenMultiplier: 0.7,
+      bulletSizeMultiplier: 1.0,
+    },
+    {
+      length: BASE_BARREL_LENGTH,
+      width: BASE_BARREL_WIDTH,
+      offsetX: 0,
+      offsetY: 12,
+      angle: 0,
+      spread: 0,
+      fireDelayRatio: 0.5,
+      reloadMultiplier: 1.0,
+      recoilMultiplier: 0.6,
+      bulletSpeedMultiplier: 1.0,
+      bulletDamageMultiplier: 0.65,
+      bulletPenMultiplier: 0.7,
+      bulletSizeMultiplier: 1.0,
+    },
+    // 後方雙管
+    {
+      length: BASE_BARREL_LENGTH,
+      width: BASE_BARREL_WIDTH,
+      offsetX: 0,
+      offsetY: -12,
+      angle: Math.PI,
+      spread: 0,
+      fireDelayRatio: 0,
+      reloadMultiplier: 1.0,
+      recoilMultiplier: 0.6,
+      bulletSpeedMultiplier: 1.0,
+      bulletDamageMultiplier: 0.65,
+      bulletPenMultiplier: 0.7,
+      bulletSizeMultiplier: 1.0,
+    },
+    {
+      length: BASE_BARREL_LENGTH,
+      width: BASE_BARREL_WIDTH,
+      offsetX: 0,
+      offsetY: 12,
+      angle: Math.PI,
+      spread: 0,
+      fireDelayRatio: 0.5,
+      reloadMultiplier: 1.0,
+      recoilMultiplier: 0.6,
+      bulletSpeedMultiplier: 1.0,
+      bulletDamageMultiplier: 0.65,
+      bulletPenMultiplier: 0.7,
+      bulletSizeMultiplier: 1.0,
+    },
+  ],
+};
+
 export const TANKS_CONFIG: Record<TankClassId, TankDefinition> = {
   basic: BASIC_TANK_DEFINITION,
   twin: TWIN_TANK_DEFINITION,
   sniper: SNIPER_TANK_DEFINITION,
   machine_gun: MACHINE_GUN_TANK_DEFINITION,
   flank_guard: FLANK_GUARD_TANK_DEFINITION,
+  triple_shot: TRIPLE_SHOT_TANK_DEFINITION,
+  assassin: ASSASSIN_TANK_DEFINITION,
+  destroyer: DESTROYER_TANK_DEFINITION,
+  twin_flank: TWIN_FLANK_TANK_DEFINITION,
 };

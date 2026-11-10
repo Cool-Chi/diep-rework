@@ -112,14 +112,14 @@ export class LevelingSystem {
   }
 
   /**
-   * 檢查坦克是否達成轉職條件並發布可進化事件
+   * 檢查坦克是否達成轉職條件並發布可進化事件 (Tier 1 @ Lv 15, Tier 2 @ Lv 30)
    */
   public checkEvolution(tank: Tank, eventBus?: EventBus): void {
+    if (!tank.active || tank.definition.evolutions.length === 0) return;
+
     if (
-      tank.active &&
-      tank.level >= 15 &&
-      tank.definition.tier === 1 &&
-      tank.definition.evolutions.length > 0
+      (tank.definition.tier === 1 && tank.level >= 15) ||
+      (tank.definition.tier === 2 && tank.level >= 30)
     ) {
       eventBus?.emitEvolutionAvailable(tank.id, tank.definition.evolutions);
     }
@@ -140,6 +140,7 @@ export class LevelingSystem {
     tank.setClass(targetDef);
     recomputeDerivedStats(tank);
     eventBus?.emitClassChanged(tank.id, targetClassId);
+    this.checkEvolution(tank, eventBus);
     return true;
   }
 

@@ -486,13 +486,17 @@ export class DebugOverlay {
     );
     btnContainer.appendChild(triggerEvoBtn);
 
-    // 職業一鍵切換按鈕區 (Tier 1 & Tier 2)
+    // 職業一鍵切換按鈕區 (Tier 1 ~ Tier 3 共 9 款職業)
     const classList: TankClassId[] = [
       'basic',
       'twin',
       'sniper',
       'machine_gun',
       'flank_guard',
+      'triple_shot',
+      'assassin',
+      'destroyer',
+      'twin_flank',
     ];
     for (let c = 0; c < classList.length; c++) {
       const cid = classList[c];
