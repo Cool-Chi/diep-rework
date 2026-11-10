@@ -55,7 +55,7 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
     expect(SNIPER_TANK_DEFINITION.fovMultiplier).toBe(1.111);
     expect(SNIPER_TANK_DEFINITION.barrels).toHaveLength(1);
     const b = SNIPER_TANK_DEFINITION.barrels[0];
-    expect(b.length).toBe(50);
+    expect(b.length).toBe(70);
     expect(b.bulletSpeedMultiplier).toBe(1.5);
     expect(b.reloadMultiplier).toBe(1.5);
   });
@@ -63,8 +63,8 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
   it('configures Machine Gun with trapezoidal tipWidth and spread', () => {
     expect(MACHINE_GUN_TANK_DEFINITION.barrels).toHaveLength(1);
     const b = MACHINE_GUN_TANK_DEFINITION.barrels[0];
-    expect(b.length).toBe(42);
-    expect(b.tipWidth).toBe(27);
+    expect(b.length).toBe(44);
+    expect(b.tipWidth).toBe(28);
     expect(b.spread).toBe(0.2);
     expect(b.reloadMultiplier).toBe(0.67);
   });
@@ -139,22 +139,22 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
     const hunter = TANKS_CONFIG.hunter;
     expect(hunter.barrels).toHaveLength(2);
     expect(hunter.fovMultiplier).toBe(1.15);
-    // 驗證底層短粗、表層長細的疊管結構 (38 / 48)
-    expect(hunter.barrels[0].width).toBe(24);
-    expect(hunter.barrels[0].length).toBe(38);
-    expect(hunter.barrels[1].width).toBe(18);
+    // 驗證底層細長 (62/18)、表層短粗 (48/24) 的疊管結構
+    expect(hunter.barrels[0].width).toBe(18);
+    expect(hunter.barrels[0].length).toBe(62);
+    expect(hunter.barrels[1].width).toBe(24);
     expect(hunter.barrels[1].length).toBe(48);
 
     const gunner = TANKS_CONFIG.gunner;
     expect(gunner.barrels).toHaveLength(4);
-    // 外側短管在底層 (長 30, offsetY ±12)，內側長管在表層 (長 38, offsetY ±5)
-    expect(gunner.barrels[0].length).toBe(30);
+    // 外側短管在底層 (長 38, offsetY ±12)，內側長管在表層 (長 46, offsetY ±5)
+    expect(gunner.barrels[0].length).toBe(38);
     expect(gunner.barrels[0].offsetY).toBe(-12);
-    expect(gunner.barrels[1].length).toBe(30);
+    expect(gunner.barrels[1].length).toBe(38);
     expect(gunner.barrels[1].offsetY).toBe(12);
-    expect(gunner.barrels[2].length).toBe(38);
+    expect(gunner.barrels[2].length).toBe(46);
     expect(gunner.barrels[2].offsetY).toBe(-5);
-    expect(gunner.barrels[3].length).toBe(38);
+    expect(gunner.barrels[3].length).toBe(46);
     expect(gunner.barrels[3].offsetY).toBe(5);
     for (const b of gunner.barrels) {
       expect(b.width).toBe(10);
@@ -170,11 +170,12 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
   it('configures Tier 3 combat specs: Assassin FOV 1.25 and Destroyer width 36 & recoil 3.5', () => {
     const assassin = TANKS_CONFIG.assassin;
     expect(assassin.fovMultiplier).toBe(1.25);
-    expect(assassin.barrels[0].length).toBe(60);
+    expect(assassin.barrels[0].length).toBe(82);
     expect(assassin.barrels[0].bulletSpeedMultiplier).toBe(1.6);
 
     const destroyer = TANKS_CONFIG.destroyer;
     expect(destroyer.barrels[0].width).toBe(36);
+    expect(destroyer.barrels[0].length).toBe(48);
     expect(destroyer.barrels[0].recoilMultiplier).toBe(3.5);
     expect(destroyer.barrels[0].bulletSizeMultiplier).toBe(2.0);
     expect(destroyer.barrels[0].bulletDamageMultiplier).toBe(3.5);
@@ -215,26 +216,26 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
     // Ranger
     const ranger = TANKS_CONFIG.ranger;
     expect(ranger.fovMultiplier).toBe(1.428);
-    expect(ranger.barrels[0].length).toBe(70);
+    expect(ranger.barrels[0].length).toBe(95);
     expect(ranger.barrels[0].bulletSpeedMultiplier).toBe(1.8);
 
     // Annihilator
     const annihilator = TANKS_CONFIG.annihilator;
     expect(annihilator.barrels[0].width).toBe(48);
-    expect(annihilator.barrels[0].length).toBe(38);
+    expect(annihilator.barrels[0].length).toBe(46);
     expect(annihilator.barrels[0].recoilMultiplier).toBe(4.5);
     expect(annihilator.barrels[0].bulletSizeMultiplier).toBe(2.67);
 
-    // Predator (38 / 48 / 58 望遠階梯疊管)
+    // Predator (底層細長 74/15 -> 中層 60/20 -> 表層短粗 46/26 覆蓋根部)
     const predator = TANKS_CONFIG.predator;
     expect(predator.fovMultiplier).toBe(1.35);
     expect(predator.barrels).toHaveLength(3);
-    expect(predator.barrels[0].width).toBe(26);
-    expect(predator.barrels[0].length).toBe(38);
+    expect(predator.barrels[0].width).toBe(15);
+    expect(predator.barrels[0].length).toBe(74);
     expect(predator.barrels[1].width).toBe(20);
-    expect(predator.barrels[1].length).toBe(48);
-    expect(predator.barrels[2].width).toBe(15);
-    expect(predator.barrels[2].length).toBe(58);
+    expect(predator.barrels[1].length).toBe(60);
+    expect(predator.barrels[2].width).toBe(26);
+    expect(predator.barrels[2].length).toBe(46);
 
     // Octo Tank
     const octo = TANKS_CONFIG.octo_tank;
@@ -244,36 +245,36 @@ describe('Tanks Configuration & Evolution Tree (M4a Tier 2)', () => {
     const triplet = TANKS_CONFIG.triplet;
     expect(triplet.barrels).toHaveLength(3);
     expect(triplet.barrels[0].offsetY).toBe(-12);
-    expect(triplet.barrels[0].length).toBe(36);
+    expect(triplet.barrels[0].length).toBe(45);
     expect(triplet.barrels[1].offsetY).toBe(12);
-    expect(triplet.barrels[1].length).toBe(36);
+    expect(triplet.barrels[1].length).toBe(45);
     expect(triplet.barrels[2].offsetY).toBe(0);
-    expect(triplet.barrels[2].length).toBe(44);
+    expect(triplet.barrels[2].length).toBe(54);
 
     // Penta Shot (外側底層 -> 內側中層 -> 中央表層)
     const penta = TANKS_CONFIG.penta_shot;
     expect(penta.barrels).toHaveLength(5);
-    expect(penta.barrels[0].length).toBe(32);
+    expect(penta.barrels[0].length).toBe(40);
     expect(penta.barrels[0].angle).toBe(-Math.PI / 4);
-    expect(penta.barrels[1].length).toBe(32);
+    expect(penta.barrels[1].length).toBe(40);
     expect(penta.barrels[1].angle).toBe(Math.PI / 4);
-    expect(penta.barrels[2].length).toBe(38);
+    expect(penta.barrels[2].length).toBe(48);
     expect(penta.barrels[2].angle).toBe(-Math.PI / 8);
-    expect(penta.barrels[3].length).toBe(38);
+    expect(penta.barrels[3].length).toBe(48);
     expect(penta.barrels[3].angle).toBe(Math.PI / 8);
-    expect(penta.barrels[4].length).toBe(44);
+    expect(penta.barrels[4].length).toBe(56);
     expect(penta.barrels[4].angle).toBe(0);
 
     // Booster (外側推進管底層 -> 內側推進管中層 -> 前主砲表層)
     const booster = TANKS_CONFIG.booster;
     expect(booster.barrels).toHaveLength(5);
-    expect(booster.barrels[0].length).toBe(28);
+    expect(booster.barrels[0].length).toBe(35);
     expect(booster.barrels[0].angle).toBeCloseTo((155 * Math.PI) / 180);
-    expect(booster.barrels[1].length).toBe(28);
+    expect(booster.barrels[1].length).toBe(35);
     expect(booster.barrels[1].angle).toBeCloseTo(-(155 * Math.PI) / 180);
-    expect(booster.barrels[2].length).toBe(34);
+    expect(booster.barrels[2].length).toBe(42);
     expect(booster.barrels[2].angle).toBeCloseTo((145 * Math.PI) / 180);
-    expect(booster.barrels[3].length).toBe(34);
+    expect(booster.barrels[3].length).toBe(42);
     expect(booster.barrels[3].angle).toBeCloseTo(-(145 * Math.PI) / 180);
     expect(booster.barrels[4].length).toBe(BASE_BARREL_LENGTH);
     expect(booster.barrels[4].angle).toBe(0);

@@ -1,5 +1,5 @@
 import { Container, Text, TextStyle } from 'pixi.js';
-import { BASE_TANK_RADIUS } from '../config/constants';
+import { BASE_TANK_RADIUS, MAX_TANK_BARRELS } from '../config/constants';
 import { sizeFactor } from '../config/stats.config';
 import type { VisibleBounds } from '../core/Camera';
 import type { Tank } from '../entities/Tank';
@@ -17,6 +17,7 @@ interface TankRenderItem {
   currentTankId: number;
   currentClassId: string;
   currentColor: number;
+  interpolatedRecoils: Float32Array;
 }
 
 /**
@@ -95,6 +96,7 @@ export class MultiTankRenderer {
         currentTankId: -1,
         currentClassId: '',
         currentColor: -1,
+        interpolatedRecoils: new Float32Array(MAX_TANK_BARRELS),
       });
     }
   }
@@ -161,8 +163,20 @@ export class MultiTankRenderer {
         aimAngle = Math.atan2(aimDy, aimDx);
       }
 
-      // 5. 更新坦克底盤與砲管
-      item.tankRenderer.update(rx, ry, aimAngle, scale);
+      // 5. 插值各砲管後座力收縮偏移並更新坦克底盤與砲管
+      const barrelCount = tank.definition.barrels.length;
+      for (let b = 0; b < barrelCount; b++) {
+        item.interpolatedRecoils[b] =
+          tank.prevBarrelRecoils[b] +
+          (tank.barrelRecoils[b] - tank.prevBarrelRecoils[b]) * alpha;
+      }
+      item.tankRenderer.update(
+        rx,
+        ry,
+        aimAngle,
+        scale,
+        item.interpolatedRecoils,
+      );
 
       // 重生無敵呼吸呼吸閃爍護盾
       if (tank.invulnerableTicks > 0) {

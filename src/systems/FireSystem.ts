@@ -1,5 +1,7 @@
 import {
   AI_MAX_TURN_RATE_PER_TICK,
+  BARREL_RECOIL_DECAY_PER_TICK,
+  BASE_BARREL_RECOIL_OFFSET,
   BASE_BULLET_RADIUS,
   BASE_BULLET_SPEED,
   BASE_RECOIL_IMPULSE,
@@ -52,10 +54,15 @@ export class FireSystem {
     const barrels = tank.definition.barrels;
     const barrelCount = barrels.length;
 
-    // 2. 推進各砲管裝填冷卻
+    // 2. 推進各砲管裝填冷卻與後座力收縮回彈
     for (let b = 0; b < barrelCount; b++) {
       if (tank.barrelCooldowns[b] > 0) {
         tank.barrelCooldowns[b]--;
+      }
+      if (tank.barrelRecoils[b] > 0.05) {
+        tank.barrelRecoils[b] *= BARREL_RECOIL_DECAY_PER_TICK;
+      } else {
+        tank.barrelRecoils[b] = 0;
       }
     }
 
@@ -140,10 +147,12 @@ export class FireSystem {
               tank.color,
             );
 
-            // 施加反方向後座力衝量
+            // 施加反方向後座力衝量（本體物理）與砲管縱向收縮（視覺動畫）
             const recoil = this.recoilImpulse * barrel.recoilMultiplier;
             tank.vx -= Math.cos(fireAngle) * recoil;
             tank.vy -= Math.sin(fireAngle) * recoil;
+            tank.barrelRecoils[b] =
+              BASE_BARREL_RECOIL_OFFSET * Math.sqrt(barrel.recoilMultiplier);
 
             // 計算該砲管的裝填時間並重置冷卻
             const bReload = Math.max(

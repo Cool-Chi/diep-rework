@@ -48,8 +48,15 @@ export const MAP_SIZE = WORLD_WIDTH;
  */
 export const BASE_TANK_RADIUS = 25;
 
-/** 基本坦克砲管長度與寬度（世界單位） */
-export const BASE_BARREL_LENGTH = 35;
+/** 單輛坦克支援之最大砲管上限（預先配置 Float32Array 零 GC 槽位） */
+export const MAX_TANK_BARRELS = 8;
+
+/**
+ * 基本坦克砲管長度與寬度（世界單位）
+ * 原版標準：直徑 50 坦克之基準砲管長度為 50（底盤圓心起算，外露 25 單位 = 1 個半徑長，長度:半徑比 L:R ≈ 2.0:1）
+ * 來源：https://diepio.fandom.com/wiki/Tanks
+ */
+export const BASE_BARREL_LENGTH = 50;
 export const BASE_BARREL_WIDTH = 18;
 
 // ==========================================
@@ -179,10 +186,22 @@ export const BULLET_SPEED_PER_POINT = (328 - 184) / (15 * 7);
 export const BULLET_INHERIT_TANK_VELOCITY = 0;
 
 /**
- * 基礎開火後座力衝量（世界單位 / tick）
+ * 基礎開火後座力衝量（世界單位 / tick，作用於坦克本體位移）
  * TODO(tune): 未查證（diepio.fandom.com/wiki/Recoil 僅定性描述無數值）
  */
 export const BASE_RECOIL_IMPULSE = 0.55;
+
+/**
+ * 基礎砲管開火收縮後座力位移距離（世界單位，作用於砲管局部縱向退縮動畫）
+ * TODO(tune): 原版開火瞬間砲管向底盤縮回約 6~10 單位後平滑回彈
+ */
+export const BASE_BARREL_RECOIL_OFFSET = 8.0;
+
+/**
+ * 砲管開火後座力每 tick 回彈衰減係數 (25 TPS 下約 3~4 ticks 彈回原位)
+ * TODO(tune): 未查證
+ */
+export const BARREL_RECOIL_DECAY_PER_TICK = 0.65;
 
 /** 子彈物件池預先配置容量 */
 export const BULLET_POOL_CAPACITY = 1024;

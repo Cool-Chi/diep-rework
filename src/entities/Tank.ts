@@ -2,6 +2,7 @@ import {
   BASE_BULLET_SPEED,
   BASE_TANK_RADIUS,
   COLOR_TANK_BLUE,
+  MAX_TANK_BARRELS,
   SPAWN_INVULNERABLE_TICKS,
 } from '../config/constants';
 import {
@@ -17,7 +18,7 @@ export interface InputCommand {
   shooting: boolean;
 }
 
-export const MAX_TANK_BARRELS = 8;
+export { MAX_TANK_BARRELS };
 
 /**
  * 坦克實體模型（純扁平數值，遵循 Zero-Allocation 鐵律）
@@ -77,6 +78,8 @@ export class Tank {
 
   public reloadCooldown = 0; // 當前剩餘裝填冷卻 tick 數
   public readonly barrelCooldowns = new Int32Array(MAX_TANK_BARRELS); // 固定預配砲管獨立冷卻 (零 GC)
+  public readonly barrelRecoils = new Float32Array(MAX_TANK_BARRELS); // 各砲管即時後座力收縮偏移 (世界單位)
+  public readonly prevBarrelRecoils = new Float32Array(MAX_TANK_BARRELS); // 上一 tick 後座力收縮偏移 (供高刷渲染插值)
 
   // 坦克定義 (Tier 1 ~ Tier 3)
   public definition: TankDefinition = BASIC_TANK_DEFINITION;
@@ -111,6 +114,8 @@ export class Tank {
   public setClass(definition: TankDefinition): void {
     this.definition = definition;
     this.resetBarrelCooldowns();
+    this.barrelRecoils.fill(0);
+    this.prevBarrelRecoils.fill(0);
   }
 
   /**
@@ -146,6 +151,8 @@ export class Tank {
     this.rotation = 0;
     this.prevRotation = 0;
     this.resetBarrelCooldowns();
+    this.barrelRecoils.fill(0);
+    this.prevBarrelRecoils.fill(0);
   }
 
   /**
@@ -166,5 +173,6 @@ export class Tank {
     this.prevX = this.x;
     this.prevY = this.y;
     this.prevRotation = this.rotation;
+    this.prevBarrelRecoils.set(this.barrelRecoils);
   }
 }
