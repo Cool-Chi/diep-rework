@@ -21,6 +21,14 @@
 5. **世界尺度基準 (World Coordinate Scale)**：
    - 嚴格對齊原版尺度：**1 背景格 = 25 世界單位**、**Lv 1 坦克半徑 = 25 世界單位**（直徑 50 單位 = 2 格寬）。
    - 畫面顯示縮放全由 `Camera` 的 `CAMERA_BASE_SCALE * fovMultiplier` 控制，世界座標不放大，所有速度與物理運算一律以「**世界單位 / tick**」進行。
+6. **Agent 瀏覽器自主實機驗收鐵則 (Autonomous Browser Verification Rule)**：
+   - **嚴禁「紙上談兵」或「僅過單元測試即宣稱交付」**：所有功能開發、Bug 修復或遊戲性調優，Agent **必須主動啟動或連接本機瀏覽器（透過 `browsermcp`）進行全自動實機操作與視覺驗收**。
+   - **五步全流程自主驗收清單**：
+     1. **連線與 Console 檢查**：連接 `http://localhost:3000/`，執行 `console` 驗證無任何 Runtime Error 或 Pixi.js 警告。
+     2. **模擬操作注入**：透過鍵盤按鍵、`DebugOverlay` 快捷按鈕或控制台指令，模擬真實玩家操作（如一鍵升級至 Lv 15/30、卡牌點擊轉職、屬性加點、切換上帝視角等）。
+     3. **動態多 Tick 連續取樣監控**：涉及 AI 決策、手感、轉向平滑度或物理碰撞之修改，必須在瀏覽器中連續採樣多個時間區間（如連續 20~50 ticks），檢查實體狀態與屬性數值序列（`aiState`, `shooting`, `rotation`, `hp` 等），**杜絕狀態乒乓閃爍、單幀抽搐、卡彈窒息或漂移死鎖**。
+     4. **效能與幀率實測**：透過 `DebugOverlay` 實時監測 FPS（目標 120+ FPS）、TPS（穩定 25 TPS）、Tick 耗時（預算內 < 40ms，平均 < 1ms）與 GPU 批次渲染耗時。
+     5. **實機截圖存證**：調用 `screenshot` 擷取 Canvas 與 HUD 實體畫面，將圖片複製至 Artifact 目錄（`C:\Users\<user>\.gemini\antigravity\brain\<conv_id>\...`）並在報告中呈現供使用者審閱。
 
 ---
 
@@ -113,8 +121,9 @@
 2. **In-Game Debug 沙盒維護（僅 `DEV` 載入）**：
    - `DebugOverlay.ts`（按 `Backquote` `` ` `` 鍵開啟）**只能在 `if (import.meta.env.DEV)` 條件下動態載入**，確保正式生產打包不含任何除錯面板程式碼。
    - 每個里程碑新增功能時，必須同步擴充 `DebugOverlay` 對應的測試與調參功能（如：無敵、一鍵升級、強制切換職業、生成 600 子彈 + 500 形狀壓力測試、調整 `TODO(tune)` 常數）。
-3. **收尾驗收回報**：
-   - 里程碑完成時的各項檢查、熱路徑掃描、驗收清單核對與回報，一律依 `/verify-milestone <編號>` 流程執行並套用其報告格式，不再於各節重複列出收尾回報項目。
+3. **收尾驗收回報與瀏覽器自主實機驗收**：
+   - 里程碑完成或重大功能收尾時的檢查、熱路徑掃描、驗收清單核對與回報，一律依 `/verify-milestone <編號>` 流程執行並套用其報告格式。
+   - **實機驗證強制執行**：必須透過 `browsermcp` 自行連線 Edge 瀏覽器，執行完整遊戲場景模擬（升級、轉職、戰鬥、AI 生成、壓力測試），擷取實機快照並完成時間序列動態檢驗，嚴禁跳過瀏覽器直接回報。
 
 ---
 
@@ -194,4 +203,10 @@
   1. `npm run typecheck`
   2. `npm test` (Vitest 單元測試全過)
   3. `npm run lint` (Biome 檢查無報錯)
-- 若涉及 UI (`EvolutionPanel`, `GameOverModal`)、相機 FOV 或砲管外觀變更，必須調用 `browsermcp` 連接已開啟的 Edge `localhost` 分頁，讀取 Console 確認 0 Error 並擷取快照驗證。
+- **Agent 瀏覽器全流程自主實機驗收（強制）**：
+  - 凡涉及 UI (`EvolutionPanel`, `GameOverModal`, `StatUpgradePanel`)、相機視野 FOV、砲管外觀、戰鬥手感、AI 戰術與狀態機、物理碰撞等任何可玩內容變更：
+  - **必須調用 `browsermcp` 自行連接本機 Edge `localhost:3000` 分頁**。
+  - 讀取 Console 確認 **0 Runtime Error / 0 Warning**。
+  - 模擬玩家真實互動（升級、點擊轉職卡牌、開火射擊、切換上帝視角、觸發 600 子彈壓力測試）。
+  - 對動態系統進行連續多 Tick 取樣（確保 0 抽搐、0 死鎖、0 漂移、持續開火）。
+  - 調用 `screenshot` 擷取 Canvas 實圖並轉存至 Artifacts，作為交付驗收之唯一具體視覺證據。
