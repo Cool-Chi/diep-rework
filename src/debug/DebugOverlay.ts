@@ -221,6 +221,7 @@ export class DebugOverlay {
       <div>Keys: <b style="color:#ffff00">${pressedStr}</b> | Dead: S:<b>${this.shapeDestroyedCount}</b> T:<b>${this.tankDiedCount}</b></div>
       <div>God: <b style="color:${this.isGodMode ? '#00ff88' : '#ff5555'}">${this.isGodMode ? 'ON' : 'OFF'}</b> | GodView: <b style="color:${this.game.camera.isGodView ? '#00ff88' : '#888888'}">${this.game.camera.isGodView ? 'ON' : 'OFF'}</b></div>
       <div>IgnorePlayer: <b style="color:${this.game.aiSystem.ignorePlayer ? '#00ff88' : '#ff5555'}">${this.game.aiSystem.ignorePlayer ? 'ON' : 'OFF'}</b> | Sandbox: <b style="color:${this.game.agentTest.isSandboxActive ? '#00ff88' : '#888888'}">${this.game.agentTest.isSandboxActive ? `ON (${this.game.agentTest.sandboxDummyClass})` : 'OFF'}</b></div>
+      <div>AI Duel: <b style="color:${this.game.agentTest.isAiDuelActive ? '#00ff88' : '#888888'}">${this.game.agentTest.isAiDuelActive ? `ON (${this.game.agentTest.duelClassAlpha} vs ${this.game.agentTest.duelClassBeta})` : 'OFF'}</b></div>
     `;
   }
 
@@ -638,6 +639,71 @@ export class DebugOverlay {
       '#e76f51',
     );
     btnContainer.appendChild(dummyGunnerBtn);
+
+    // AI 決鬥對戰沙盒按鈕組
+    const aiDuelBtn = createBtn(
+      this.game.agentTest.isAiDuelActive ? 'Exit AI Duel' : '⚔️ AI Duel Arena',
+      () => {
+        if (this.game.agentTest.isAiDuelActive) {
+          this.game.agentTest.stopAiDuelSandbox();
+        } else {
+          this.game.agentTest.startAiDuelSandbox('twin', 'destroyer', true);
+        }
+        aiDuelBtn.textContent = this.game.agentTest.isAiDuelActive
+          ? 'Exit AI Duel'
+          : '⚔️ AI Duel Arena';
+        aiDuelBtn.style.backgroundColor = this.game.agentTest.isAiDuelActive
+          ? '#e63946'
+          : '#3a0ca3';
+        this.renderMetrics();
+      },
+      this.game.agentTest.isAiDuelActive ? '#e63946' : '#3a0ca3',
+    );
+    aiDuelBtn.style.gridColumn = 'span 2';
+    btnContainer.appendChild(aiDuelBtn);
+
+    const duelAlphaBtn = createBtn(
+      'Alpha: Twin/Sniper',
+      () => {
+        const nextA =
+          this.game.agentTest.duelClassAlpha === 'twin' ? 'sniper' : 'twin';
+        this.game.agentTest.setAiDuelClasses(
+          nextA,
+          this.game.agentTest.duelClassBeta,
+        );
+        this.renderMetrics();
+      },
+      '#1d3557',
+    );
+    btnContainer.appendChild(duelAlphaBtn);
+
+    const duelBetaBtn = createBtn(
+      'Beta: Destr/MachineGun',
+      () => {
+        const nextB =
+          this.game.agentTest.duelClassBeta === 'destroyer'
+            ? 'machine_gun'
+            : 'destroyer';
+        this.game.agentTest.setAiDuelClasses(
+          this.game.agentTest.duelClassAlpha,
+          nextB,
+        );
+        this.renderMetrics();
+      },
+      '#7209b7',
+    );
+    btnContainer.appendChild(duelBetaBtn);
+
+    const duelGodBtn = createBtn(
+      'Toggle Duel GodMode',
+      () => {
+        this.game.agentTest.toggleAiDuelGodMode();
+        this.renderMetrics();
+      },
+      '#4361ee',
+    );
+    duelGodBtn.style.gridColumn = 'span 2';
+    btnContainer.appendChild(duelGodBtn);
 
     // 職業一鍵切換折疊區 (Tier 1 ~ Tier 4 全 21 款職業)
     const detailsClasses = document.createElement('details');

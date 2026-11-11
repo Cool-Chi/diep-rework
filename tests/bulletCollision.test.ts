@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { EventBus } from '../src/core/EventBus';
 import { ObjectPool } from '../src/core/ObjectPool';
 import { Bullet } from '../src/entities/Bullet';
+import { Tank } from '../src/entities/Tank';
 import { CollisionSystem } from '../src/systems/CollisionSystem';
 import { ShapeSystem } from '../src/systems/ShapeSystem';
 
@@ -189,5 +190,77 @@ describe('Bullet-vs-Bullet Collision Physics (M8 Phase 2)', () => {
     expect(collisionSystem.bulletClashCount).toBe(1);
     expect(bA.active).toBe(false);
     expect(bB.active).toBe(false);
+  });
+
+  it('guarantees bullet damages large Lv 45 tank across spatial hash cell boundary without ghosting', () => {
+    // 建立一隻 Lv 45 大體積坦克 (半徑 38.7，位於 cell 邊界 128 附近，例如 x = 135, y = 100)
+    const tank = new Tank(1001, 135, 100);
+    tank.active = true;
+    tank.isAi = true;
+    tank.radius = 38.7;
+    tank.hp = 100;
+    tank.invulnerableTicks = 0;
+
+    // 子彈由 x = 60, y = 100 以高速 vx = 35 飛向坦克，上一 tick 在 60，本 tick 在 95
+    // 95 + radius 9 = 104，此時已深入坦克邊界 (135 - 38.7 = 96.3) 內部，且跨越了 cell 邊界 (128)！
+    const bIdx = pool.acquire();
+    const bullet = pool.items[bIdx];
+    bullet.init(bIdx, 1, 95, 100, 35, 0, 9, 2, 7);
+    bullet.prevX = 60;
+    bullet.prevY = 100;
+
+    let hitTriggered = false;
+    eventBus.onBulletHit(() => {
+      hitTriggered = true;
+    });
+
+    collisionSystem.update([tank], pool, [], shapeSystem, eventBus, 1);
+
+    expect(hitTriggered).toBe(true);
+    expect(tank.hp).toBeLessThan(100);
+    expect(bullet.active).toBe(false);
+  });
+
+  it('guarantees bullet hits invulnerable or godMode bot: sparks and absorbs bullet instead of ghosting through', () => {
+    const godTank = new Tank(1002, 200, 200);
+    godTank.active = true;
+    godTank.isAi = true;
+    godTank.isGodMode = true;
+    godTank.hp = 100;
+
+    const bIdx = pool.acquire();
+    const bullet = pool.items[bIdx];
+    bullet.init(bIdx, 1, 200, 200, 10, 0, 9, 1, 7);
+
+    let hitSparks = 0;
+    eventBus.onBulletHit(() => {
+      hitSparks++;
+    });
+
+    collisionSystem.update([godTank], pool, [], shapeSystem, eventBus, 1);
+
+    // 斷言：子彈撞擊無敵坦克必須受反傷被銷毀，產生受擊火花，絕不可如幽靈般穿透
+    expect(hitSparks).toBe(1);
+    expect(bullet.active).toBe(false);
+    expect(godTank.hp).toBe(100); // 無敵坦克本體不扣血
+  });
+
+  it('consumes invulnerability ticks when hit, preventing standing bots from being permanently invulnerable', () => {
+    const freshTank = new Tank(1003, 300, 300);
+    freshTank.active = true;
+    freshTank.isAi = true;
+    freshTank.invulnerableTicks = 75; // 剛重生 75 ticks 護盾
+    freshTank.hp = 50;
+
+    const bIdx = pool.acquire();
+    const bullet = pool.items[bIdx];
+    bullet.init(bIdx, 1, 300, 300, 10, 0, 9, 1, 7);
+
+    collisionSystem.update([freshTank], pool, [], shapeSystem, eventBus, 1);
+
+    expect(bullet.active).toBe(false);
+    // 護盾受擊消耗 25 ticks
+    expect(freshTank.invulnerableTicks).toBe(50);
+    expect(freshTank.hp).toBe(50);
   });
 });

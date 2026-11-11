@@ -1,25 +1,40 @@
-import { MAP_SIZE } from '../config/constants';
+import {
+  AI_BORDER_BUFFER,
+  AI_BULLET_SCAN_RADIUS,
+  AI_INTERCEPT_LOCK_TICKS,
+  AI_INTERCEPT_MAX_ANGLE,
+  AI_MAX_CPA_TICKS,
+  AI_TARGET_STICKINESS_RATIO,
+  MAP_SIZE,
+} from '../config/constants';
 import type { ObjectPool } from '../core/ObjectPool';
 import type { Bullet } from '../entities/Bullet';
 import type { Shape } from '../entities/Shape';
 import type { Tank } from '../entities/Tank';
 import { getOptimalCombatDistance } from './aiTactics';
 
-const PERCEPTION_RADIUS = 550; // 索敵警戒半徑
-const THREAT_ESCAPE_RADIUS = 700; // 脫離威脅安全半徑
-const MIN_RETREAT_TICKS = 45; // 殘血逃逸至少保持 45 ticks (1.8秒) 防抖
+const PERCEPTION_RADIUS = 750; // 索敵警戒半徑（隨相機視野擴大同步提升）
+const THREAT_ESCAPE_RADIUS = 950; // 脫離威脅安全半徑
 const SHAPE_SAFE_DISTANCE = 140; // 避免與形狀肉搏碰撞之安全緩衝
-const BULLET_EVASION_RADIUS = 180; // 子彈近迫警戒半徑
-const BORDER_BUFFER = 250; // 邊界推回力場緩衝
+const BORDER_BUFFER = AI_BORDER_BUFFER; // 邊界推回力場緩衝 (350)
 
 /**
  * AI 決策系統 (AISystem)
+ * 整合 M8 Phase 3 (CPA 來襲彈幕預判、擬人前向視錐主動攔截) 與 Phase 4 (5 股連續向量加權混合、牆角防死鎖滑動與 1.25x 效用慣性)。
  * 100% 透過寫入實體的 InputCommand (moveX, moveY, aimX, aimY, shooting) 驅動，
  * 嚴格遵循熱路徑零配置 (Zero-Allocation)，不 new 任何臨時物件與閉包。
  */
 export class AISystem {
   public passiveMode = false; // 是否進入測試靜止/不開火模式
   public ignorePlayer = true; // 是否無視玩家 (調試用，預設開啟)
+
+  /** 小型競技場邊界約束（當沙盒啟用時限定 AI 活動範圍，否則為全圖） */
+  public arenaBounds: {
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+  } | null = null;
 
   /**
    * 每個模擬 tick (25 TPS) 更新所有活動 AI 坦克的輸入指令
@@ -70,284 +85,159 @@ export class AISystem {
         bot.aiStrafeDirection = bot.aiStrafeDirection === 1 ? -1 : 1;
       }
 
-      // 2. 戰術狀態機推進 (含滯後緩衝防抖與實力懸殊智慧評估)
-      this.evaluateState(bot, allTanks);
+      // 2. 【Phase 3 防呆 1: 防幽靈鎖定 (Stale Pool Index)】
+      this.validateInterceptLock(bot, bulletPool);
 
-      // 3. 依狀態計算移動意圖向量與瞄準目標
-      switch (bot.aiState) {
-        case 'retreating':
-          this.executeRetreat(bot, allTanks, shapes);
-          break;
-        case 'engaging':
-          this.executeCombat(bot, allTanks, bulletPool);
-          break;
-        default:
-          this.executeFarming(bot, shapes);
-          break;
+      // 3. 【Phase 3: CPA 來襲威脅預判與高威脅子彈鎖定】
+      let evadeX = 0;
+      let evadeY = 0;
+      const bestThreatBulletIdx = this.scanBulletThreats(
+        bot,
+        bulletPool,
+        (ex, ey) => {
+          evadeX += ex;
+          evadeY += ey;
+        },
+      );
+
+      // 若未處於鎖定中且偵測到高威脅子彈，觸發 10 ticks 防抖鎖定
+      if (bestThreatBulletIdx !== -1 && bot.aiInterceptTimer <= 0) {
+        bot.aiInterceptBulletIdx = bestThreatBulletIdx;
+        bot.aiInterceptTimer = AI_INTERCEPT_LOCK_TICKS;
       }
 
-      // 4. 世界地圖邊界排斥力場（防止 AI 卡在 4000x4000 邊緣）
-      this.applyBoundaryAvoidance(bot);
+      // 4. 【Phase 4: 具 1.25x 慣性之目標選取，並動態繼承職業 FOV】
+      const classFov = bot.definition?.fovMultiplier ?? 1.0;
+      const perceptionLimit = this.arenaBounds
+        ? 1500
+        : (bot.aiState === 'retreating'
+            ? THREAT_ESCAPE_RADIUS
+            : PERCEPTION_RADIUS) * classFov;
+      const enemyTarget = this.findNearestEnemyTank(
+        bot,
+        allTanks,
+        perceptionLimit,
+      );
+      if (enemyTarget) {
+        bot.aiTargetId = enemyTarget.id;
+      } else {
+        bot.aiTargetId = -1;
+      }
 
-      // 5. 正規化意圖移動速度向量，長度不超過 1.0
-      this.normalizeMovement(bot);
+      const shapeTarget = this.findNearestShape(bot, shapes, 1200);
+      if (shapeTarget) {
+        bot.aiTargetShapeId = shapeTarget.id;
+      } else {
+        bot.aiTargetShapeId = -1;
+      }
+
+      // 5. 狀態標記推進（維持向後相容與 telemetry）
+      const hpRatio = bot.hp / bot.maxHp;
+      if (hpRatio < 0.35 && enemyTarget) {
+        bot.aiState = 'retreating';
+      } else if (enemyTarget) {
+        bot.aiState = 'engaging';
+      } else {
+        bot.aiState = 'farming';
+      }
+
+      // 6. 【Phase 4: 5 股連續向量力場混合與牆角防死鎖滑動】
+      this.blendSteeringVectors(
+        bot,
+        enemyTarget,
+        shapeTarget,
+        evadeX,
+        evadeY,
+        hpRatio,
+      );
+
+      // 7. 【Phase 3 & Phase 4: 瞄準與射擊決策（攔截提前量 + 反衝加速 + 提前量預判）】
+      this.decideAimAndShoot(bot, enemyTarget, shapeTarget, bulletPool);
     }
   }
 
   /**
-   * 評估與切換 AI 戰術狀態（帶有滯後區間、實力懸殊避戰與冷卻）
+   * 【Phase 3 防呆 1】防幽靈鎖定 (Stale Pool Index)：
+   * 每 tick 驗證鎖定子彈是否仍處於活躍中、非自身發射且正朝向自身逼近。一旦無效立即重置。
    */
-  private evaluateState(bot: Tank, allTanks: Tank[]): void {
-    const hpRatio = bot.hp / bot.maxHp;
-
-    // A. 殘血危機判斷 (HP < 35%)：僅在索敵感知半徑內確實存在敵對坦克威脅時才進入 RETREATING
-    if (hpRatio < 0.35 && bot.aiState !== 'retreating') {
-      const threat = this.findNearestEnemyTank(
-        bot,
-        allTanks,
-        PERCEPTION_RADIUS,
-      );
-      if (threat) {
-        bot.aiState = 'retreating';
-        bot.aiStateTimer = 0;
-        bot.aiTargetId = threat.id;
-        return;
-      }
-      // 若周遭無任何敵方坦克威脅，維持 farming 打怪升等回血，絕不觸發無威脅殘血漂移
-    }
-
-    // B. 逃逸復原判斷 (若威脅已遠離超出 THREAT_ESCAPE_RADIUS 或 HP 回復至 60%)
-    if (bot.aiState === 'retreating') {
-      const nearestEnemy = this.findNearestEnemyTank(
-        bot,
-        allTanks,
-        THREAT_ESCAPE_RADIUS,
-      );
-      if (!nearestEnemy) {
-        // 周圍已無敵對威脅（具備 550 ↔ 700 滯後緩衝），立即重回 FARMING 發育打怪，徹底解除無威脅漂移鎖
-        bot.aiState = 'farming';
-        bot.aiStateTimer = 0;
-        bot.aiTargetId = -1;
-        bot.aiTargetShapeId = -1;
-        bot.aiTargetStickinessTimer = 0;
-      } else {
-        bot.aiTargetId = nearestEnemy.id;
-        // 敵方仍在警戒區內，需維持逃逸滿 MIN_RETREAT_TICKS 且血量回復至 60% 以上才轉為反打
-        if (bot.aiStateTimer >= MIN_RETREAT_TICKS && hpRatio >= 0.6) {
-          bot.aiState = 'engaging';
-          bot.aiStateTimer = 0;
-        }
-      }
+  private validateInterceptLock(
+    bot: Tank,
+    bulletPool: ObjectPool<Bullet>,
+  ): void {
+    if (bot.aiInterceptTimer <= 0 || bot.aiInterceptBulletIdx < 0) {
+      bot.aiInterceptBulletIdx = -1;
+      bot.aiInterceptTimer = 0;
       return;
     }
 
-    // C. 索敵對決判斷：感知半徑內是否有敵對目標
-    const threat = this.findNearestEnemyTank(bot, allTanks, PERCEPTION_RADIUS);
-    if (threat) {
-      // 實力懸殊避戰：若敵方高出自己 12 級以上且自身未滿 Lv 15，避免送死衝鋒
-      const levelGap = threat.level - bot.level;
-      if (levelGap >= 12 && bot.level < 15) {
-        const d = this.dist(bot, threat);
-        if (d < 450 || hpRatio < 0.8) {
-          bot.aiState = 'retreating';
-          bot.aiStateTimer = 0;
-          bot.aiTargetId = threat.id;
-          return;
-        }
-        // 否則維持 farming 狀態繞行發育，不主動切換為 engaging
-      } else if (bot.aiState !== 'engaging') {
-        bot.aiState = 'engaging';
-        bot.aiStateTimer = 0;
-        bot.aiTargetId = threat.id;
-      }
-    } else {
-      // 若原先交火中但失去目標（超出警戒區），切回 FARMING
-      if (bot.aiState === 'engaging') {
-        const currentTarget = this.findTankById(bot.aiTargetId, allTanks);
-        if (!currentTarget?.active || this.dist(bot, currentTarget) > 650) {
-          bot.aiState = 'farming';
-          bot.aiStateTimer = 0;
-          bot.aiTargetId = -1;
-          bot.aiTargetShapeId = -1;
-        }
-      }
+    const idx = bot.aiInterceptBulletIdx;
+    if (idx >= bulletPool.capacity || !bulletPool.isActive(idx)) {
+      bot.aiInterceptBulletIdx = -1;
+      bot.aiInterceptTimer = 0;
+      return;
     }
+
+    const bullet = bulletPool.items[idx];
+    if (
+      !bullet.active ||
+      bullet.ownerId === bot.id ||
+      (this.ignorePlayer && bullet.ownerId === 1)
+    ) {
+      bot.aiInterceptBulletIdx = -1;
+      bot.aiInterceptTimer = 0;
+      return;
+    }
+
+    const rx = bullet.x - bot.x;
+    const ry = bullet.y - bot.y;
+    const d2 = rx * rx + ry * ry;
+    if (d2 > 450 * 450) {
+      bot.aiInterceptBulletIdx = -1;
+      bot.aiInterceptTimer = 0;
+      return;
+    }
+
+    const rvx = bullet.vx - bot.vx;
+    const rvy = bullet.vy - bot.vy;
+    const dot = rx * rvx + ry * rvy;
+    if (dot >= 0) {
+      // 子彈已飛越自身或正在遠離
+      bot.aiInterceptBulletIdx = -1;
+      bot.aiInterceptTimer = 0;
+      return;
+    }
+
+    // 【擬人化視錐驗證】：若鎖定之子彈已大幅偏離砲管正前視錐（> 45°），立即解除瞄準鎖定，回歸敵方本體
+    const bulletAngle = Math.atan2(ry, rx);
+    let angleDiff = bulletAngle - bot.rotation;
+    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+    if (Math.abs(angleDiff) > AI_INTERCEPT_MAX_ANGLE * 1.25) {
+      bot.aiInterceptBulletIdx = -1;
+      bot.aiInterceptTimer = 0;
+      return;
+    }
+
+    // 通過檢查，扣減鎖定維持計時
+    bot.aiInterceptTimer--;
   }
 
   /**
-   * 執行 FARMING 狀態（打怪發育與遊蕩，含目標記憶鎖定防抽搐）
+   * 【Phase 3: CPA (Closest Point of Approach) 來襲威脅預判】
+   * 掃描周圍 400 範圍內敵方子彈，計算相對速度、最接近時間 t_cpa 與碰撞半徑。
+   * @returns 最高威脅子彈索引（若無高威脅則回傳 -1）
    */
-  private executeFarming(bot: Tank, shapes: Shape[]): void {
-    let shape: Shape | null = null;
-
-    // 優先沿用當前鎖定之形狀 (放寬至 1300 單位，最長 125 ticks = 5 秒記憶鎖定，避免高頻抽搐切換)
-    if (bot.aiTargetShapeId >= 0) {
-      const existing = this.findShapeById(bot.aiTargetShapeId, shapes);
-      if (
-        existing?.active &&
-        this.distToShape(bot, existing) <= 1300 &&
-        bot.aiTargetStickinessTimer < 125
-      ) {
-        shape = existing;
-        bot.aiTargetStickinessTimer++;
-      }
-    }
-
-    if (!shape) {
-      shape = this.findNearestShape(bot, shapes, 600);
-      if (!shape) {
-        // 若 600 範圍內無形狀，擴展視野至 1200 單位主動搜尋靠攏
-        shape = this.findNearestShape(bot, shapes, 1200);
-      }
-      if (!shape) {
-        // 若 1200 範圍內仍無形狀，全圖搜尋最近形狀靠攏
-        shape = this.findNearestShape(bot, shapes, MAP_SIZE * 1.5);
-      }
-      if (shape) {
-        bot.aiTargetShapeId = shape.id;
-        bot.aiTargetStickinessTimer = 0;
-      } else {
-        bot.aiTargetShapeId = -1;
-        bot.aiTargetStickinessTimer = 0;
-      }
-    }
-
-    if (shape) {
-      const dx = shape.x - bot.x;
-      const dy = shape.y - bot.y;
-      const d = Math.sqrt(dx * dx + dy * dy);
-
-      // 瞄準形狀並射擊
-      bot.input.aimX = shape.x;
-      bot.input.aimY = shape.y;
-      bot.input.shooting = true;
-
-      // 移動：若距離大於安全距離則靠近，過近則保持安全距離防止碰撞受傷
-      if (d > SHAPE_SAFE_DISTANCE) {
-        bot.input.moveX = dx / d;
-        bot.input.moveY = dy / d;
-      } else {
-        bot.input.moveX = -dx / d;
-        bot.input.moveY = -dy / d;
-      }
-    } else {
-      // 無形狀時平滑巡邏漫遊 (每 100 ticks 緩慢微調航向，巡邏地圖廣大區域)
-      bot.input.shooting = false;
-      const angle =
-        (bot.id * 1.7 + Math.floor(bot.aiStateTimer / 100) * 0.8) %
-        (Math.PI * 2);
-      bot.input.moveX = Math.cos(angle) * 0.65;
-      bot.input.moveY = Math.sin(angle) * 0.65;
-      bot.input.aimX = bot.x + Math.cos(angle) * 100;
-      bot.input.aimY = bot.y + Math.sin(angle) * 100;
-    }
-  }
-
-  /**
-   * 執行 ENGAGING 狀態（風箏拉打、提前量瞄準與彈道閃避）
-   */
-  private executeCombat(
+  private scanBulletThreats(
     bot: Tank,
-    allTanks: Tank[],
     bulletPool: ObjectPool<Bullet>,
-  ): void {
-    let target = this.findTankById(bot.aiTargetId, allTanks);
-    if (!target?.active || (this.ignorePlayer && !target.isAi)) {
-      target = this.findNearestEnemyTank(bot, allTanks, PERCEPTION_RADIUS);
-      if (!target) {
-        bot.aiState = 'farming';
-        return;
-      }
-      bot.aiTargetId = target.id;
-    }
-
-    let dx = target.x - bot.x;
-    let dy = target.y - bot.y;
-    let distToTarget = Math.sqrt(dx * dx + dy * dy);
-
-    // 動態近迫威脅換鎖：若有其他敵對坦克距離自身 < 300 且比當前目標近 120 單位以上，優先轉火應對近迫威脅
-    const nearest = this.findNearestEnemyTank(bot, allTanks, PERCEPTION_RADIUS);
-    if (nearest && nearest.id !== target.id) {
-      const nearestDist = this.dist(bot, nearest);
-      if (nearestDist < 300 && distToTarget - nearestDist > 120) {
-        target = nearest;
-        bot.aiTargetId = nearest.id;
-        dx = target.x - bot.x;
-        dy = target.y - bot.y;
-        distToTarget = nearestDist;
-      }
-    }
-
-    if (distToTarget <= 0.0001) return;
-
-    const nx = dx / distToTarget;
-    const ny = dy / distToTarget;
-
-    // 1. 提前量預測瞄準 (Lead Aiming)
-    const bSpeed = Math.max(bot.bulletSpeed, 10);
-    const tHit = distToTarget / bSpeed;
-    bot.input.aimX = target.x + target.vx * tHit;
-    bot.input.aimY = target.y + target.vy * tHit;
-    bot.input.shooting = true;
-
-    // 2. 戰術拉打走位 (基於職業最佳距離的推進/後退 + 側向環繞 Strafe)
-    const optimalDist = getOptimalCombatDistance(bot.definition.id);
-    const strafeDir = bot.aiStrafeDirection;
-    const perpX = -ny * strafeDir;
-    const perpY = nx * strafeDir;
-
-    let forwardWeight = 0;
-    if (distToTarget > optimalDist + 40) {
-      forwardWeight = 0.75; // 太遠，向前推進
-    } else if (distToTarget < optimalDist - 40) {
-      forwardWeight = -0.75; // 太近，後退拉開射程
-    }
-
-    bot.input.moveX = nx * forwardWeight + perpX * 0.85;
-    bot.input.moveY = ny * forwardWeight + perpY * 0.85;
-
-    // 3. 子彈彈道近迫閃避 (Bullet Strafing Dodge)
-    this.applyBulletEvasion(bot, bulletPool);
-  }
-
-  /**
-   * 執行 RETREATING 狀態（背向狂奔 + 砲管後座力火箭反衝推進；無威脅時委派農怪發育，杜絕停火飄移）
-   */
-  private executeRetreat(bot: Tank, allTanks: Tank[], shapes: Shape[]): void {
-    const threat = this.findNearestEnemyTank(
-      bot,
-      allTanks,
-      THREAT_ESCAPE_RADIUS,
-    );
-
-    if (threat) {
-      const dx = threat.x - bot.x;
-      const dy = threat.y - bot.y;
-      const d = Math.sqrt(dx * dx + dy * dy);
-
-      if (d > 0.001) {
-        // 向威脅來源的相反方向全速衝刺
-        bot.input.moveX = -dx / d;
-        bot.input.moveY = -dy / d;
-
-        // 【後座力火箭反衝技術】：砲管轉向身後追擊者全力開火，利用後座力為自己提供逃逸推力！
-        bot.input.aimX = threat.x;
-        bot.input.aimY = threat.y;
-        bot.input.shooting = true;
-        return;
-      }
-    }
-
-    // 若周遭已無威脅，直接委派執行農怪發育，絕不盲目停火飄移
-    this.executeFarming(bot, shapes);
-  }
-
-  /**
-   * 即時偵測朝向自身逼近之敵方子彈，疊加垂直側移閃躲力道
-   */
-  private applyBulletEvasion(bot: Tank, bulletPool: ObjectPool<Bullet>): void {
+    onEvadeForce: (ex: number, ey: number) => void,
+  ): number {
     const items = bulletPool.items;
     const len = items.length;
+    let highestThreatIdx = -1;
+    let maxThreatScore = 0;
+
+    const scanRadiusSq = AI_BULLET_SCAN_RADIUS * AI_BULLET_SCAN_RADIUS;
 
     for (let i = 0; i < len; i++) {
       const bullet = items[i];
@@ -359,67 +249,319 @@ export class AISystem {
         continue;
       }
 
-      const bdx = bullet.x - bot.x;
-      const bdy = bullet.y - bot.y;
-      const bDistSq = bdx * bdx + bdy * bdy;
+      const rx = bullet.x - bot.x;
+      const ry = bullet.y - bot.y;
+      const d2 = rx * rx + ry * ry;
+      if (d2 > scanRadiusSq) continue;
 
-      // 進入警戒範圍 (180 單位以內)
-      if (bDistSq < BULLET_EVASION_RADIUS * BULLET_EVASION_RADIUS) {
-        // 檢查子彈是否正朝自身逼近 (相對速度與相對向量內積 < 0)
-        const dot = bdx * bullet.vx + bdy * bullet.vy;
-        if (dot < 0) {
-          const bSpeed = Math.sqrt(
-            bullet.vx * bullet.vx + bullet.vy * bullet.vy,
-          );
-          if (bSpeed > 0.01) {
-            // 子彈行進方向之垂直向量
-            const evadeX = -bullet.vy / bSpeed;
-            const evadeY = bullet.vx / bSpeed;
+      const rvx = bullet.vx - bot.vx;
+      const rvy = bullet.vy - bot.vy;
+      const vSq = rvx * rvx + rvy * rvy;
+      if (vSq < 0.01) continue;
 
-            // 疊加側移閃避力道
-            bot.input.moveX += evadeX * 1.2;
-            bot.input.moveY += evadeY * 1.2;
-            break; // 每次優先規避最近的一顆危險子彈
+      const dot = rx * rvx + ry * rvy;
+      if (dot >= 0) continue; // 子彈正在遠離
+
+      const tCpa = -dot / vSq;
+      if (tCpa <= 0 || tCpa > AI_MAX_CPA_TICKS) continue;
+
+      const cx = rx + rvx * tCpa;
+      const cy = ry + rvy * tCpa;
+      const dCpaSq = cx * cx + cy * cy;
+
+      const corridorRadius = bot.radius + bullet.radius + 18;
+      if (dCpaSq <= corridorRadius * corridorRadius) {
+        // 進入預測碰撞走廊！計算垂直側移避難向量
+        const bSpeed = Math.sqrt(bullet.vx * bullet.vx + bullet.vy * bullet.vy);
+        if (bSpeed > 0.01) {
+          let perpX = -bullet.vy / bSpeed;
+          let perpY = bullet.vx / bSpeed;
+
+          // 選擇避難方向：向遠離碰撞中心點 (cx, cy) 之方向側閃
+          if (cx * perpX + cy * perpY > 0) {
+            perpX = -perpX;
+            perpY = -perpY;
+          }
+
+          const urgency = (AI_MAX_CPA_TICKS - tCpa) / AI_MAX_CPA_TICKS;
+          onEvadeForce(perpX * urgency * 1.5, perpY * urgency * 1.5);
+        }
+
+        // 【Phase 3 擬人前向視錐過濾】：檢查子彈是否位於目前砲管前向約 ±35.5 度內
+        // 側向/身後流彈一律純靠身法 (onEvadeForce) 走位閃避，堅決不轉動砲管去搶瞄！
+        const aimAngleToBullet = Math.atan2(ry, rx);
+        let angleDiff = aimAngleToBullet - bot.rotation;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+        if (Math.abs(angleDiff) <= AI_INTERCEPT_MAX_ANGLE && tCpa <= 20) {
+          // 【Phase 3 防呆 2: 威脅門檻評估】
+          const isHeavy = bullet.radius >= 14 || bullet.hp >= 8;
+          const isLethal =
+            bullet.damage >= bot.hp * 0.35 || bot.hp / bot.maxHp < 0.4;
+          const isSniper =
+            bullet.damage >= 10 &&
+            bullet.vx * bullet.vx + bullet.vy * bullet.vy >= 14 * 14;
+
+          if (isHeavy || isLethal || isSniper) {
+            const threatScore =
+              (bullet.damage * (1 + bullet.hp / Math.max(bot.hp, 1))) /
+              (1 + tCpa * 0.1);
+            if (threatScore > maxThreatScore) {
+              maxThreatScore = threatScore;
+              highestThreatIdx = i;
+            }
           }
         }
       }
     }
+
+    return highestThreatIdx;
   }
 
   /**
-   * 邊界防撞力場：距離邊緣小於 BORDER_BUFFER 時向內推回
+   * 【Phase 4: 5 股連續力場向量加權混合與防死鎖滑動】
    */
-  private applyBoundaryAvoidance(bot: Tank): void {
-    const buf = BORDER_BUFFER;
+  private blendSteeringVectors(
+    bot: Tank,
+    enemyTarget: Tank | null,
+    shapeTarget: Shape | null,
+    evadeX: number,
+    evadeY: number,
+    hpRatio: number,
+  ): void {
+    // 1. 戰鬥交火向量 (Combat)
+    let combatX = 0;
+    let combatY = 0;
+    let enemyDist = 9999;
+    if (enemyTarget) {
+      const edx = enemyTarget.x - bot.x;
+      const edy = enemyTarget.y - bot.y;
+      enemyDist = Math.sqrt(edx * edx + edy * edy);
+      if (enemyDist > 0.001) {
+        const enx = edx / enemyDist;
+        const eny = edy / enemyDist;
+        const optDist = getOptimalCombatDistance(bot.definition.id);
+        const perpX = -eny * bot.aiStrafeDirection;
+        const perpY = enx * bot.aiStrafeDirection;
 
-    if (bot.x < buf) {
-      bot.input.moveX += (buf - bot.x) / buf;
-    } else if (bot.x > MAP_SIZE - buf) {
-      bot.input.moveX -= (bot.x - (MAP_SIZE - buf)) / buf;
+        let fwd = (enemyDist - optDist) / 100;
+        if (fwd > 1) fwd = 1;
+        if (fwd < -1) fwd = -1;
+
+        combatX = enx * fwd * 0.75 + perpX * 0.85;
+        combatY = eny * fwd * 0.75 + perpY * 0.85;
+      }
     }
 
-    if (bot.y < buf) {
-      bot.input.moveY += (buf - bot.y) / buf;
-    } else if (bot.y > MAP_SIZE - buf) {
-      bot.input.moveY -= (bot.y - (MAP_SIZE - buf)) / buf;
+    // 2. 逃逸後撤向量 (Retreat)
+    let retreatX = 0;
+    let retreatY = 0;
+    if (enemyTarget && enemyDist > 0.001) {
+      retreatX = -((enemyTarget.x - bot.x) / enemyDist) * 1.3;
+      retreatY = -((enemyTarget.y - bot.y) / enemyDist) * 1.3;
     }
-  }
 
-  /**
-   * 正規化意圖移動指令大小至 1.0 上限
-   */
-  private normalizeMovement(bot: Tank): void {
-    const mx = bot.input.moveX;
-    const my = bot.input.moveY;
+    // 3. 打怪靠攏向量 (Farm)
+    let farmX = 0;
+    let farmY = 0;
+    if (shapeTarget) {
+      const sdx = shapeTarget.x - bot.x;
+      const sdy = shapeTarget.y - bot.y;
+      const sd = Math.sqrt(sdx * sdx + sdy * sdy);
+      if (sd > 0.001) {
+        if (sd > SHAPE_SAFE_DISTANCE) {
+          farmX = sdx / sd;
+          farmY = sdy / sd;
+        } else {
+          farmX = -(sdx / sd);
+          farmY = -(sdy / sd);
+        }
+      }
+    } else {
+      const angle =
+        (bot.id * 1.7 + Math.floor(bot.aiStateTimer / 100) * 0.8) %
+        (Math.PI * 2);
+      farmX = Math.cos(angle) * 0.65;
+      farmY = Math.sin(angle) * 0.65;
+    }
+
+    // 4. 世界地圖邊界排斥向量 (Border，支援小型決鬥沙盒邊界)
+    let borderX = 0;
+    let borderY = 0;
+    const buf = this.arenaBounds ? 150 : BORDER_BUFFER;
+    const minX = this.arenaBounds ? this.arenaBounds.minX : 0;
+    const maxX = this.arenaBounds ? this.arenaBounds.maxX : MAP_SIZE;
+    const minY = this.arenaBounds ? this.arenaBounds.minY : 0;
+    const maxY = this.arenaBounds ? this.arenaBounds.maxY : MAP_SIZE;
+    if (bot.x < minX + buf) {
+      borderX += (minX + buf - bot.x) / buf;
+    } else if (bot.x > maxX - buf) {
+      borderX -= (bot.x - (maxX - buf)) / buf;
+    }
+    if (bot.y < minY + buf) {
+      borderY += (minY + buf - bot.y) / buf;
+    } else if (bot.y > maxY - buf) {
+      borderY -= (bot.y - (maxY - buf)) / buf;
+    }
+    borderX *= 1.6;
+    borderY *= 1.6;
+
+    // 5. 計算連續過渡權重 (Continuous Crisis Weight)
+    let wCrisis = (0.55 - hpRatio) / 0.35;
+    if (wCrisis < 0) wCrisis = 0;
+    if (wCrisis > 1) wCrisis = 1;
+
+    let wCombat = 0;
+    let wRetreat = 0;
+    let wFarm = 1.0;
+
+    if (enemyTarget) {
+      const classFov = bot.definition?.fovMultiplier ?? 1.0;
+      const threatRadius = this.arenaBounds
+        ? 1500
+        : (bot.aiState === 'retreating'
+            ? THREAT_ESCAPE_RADIUS
+            : PERCEPTION_RADIUS) * classFov;
+      let dRatio = (threatRadius - enemyDist) / 250;
+      if (dRatio < 0) dRatio = 0;
+      if (dRatio > 1) dRatio = 1;
+
+      wRetreat = dRatio > 0 ? wCrisis * 1.25 : 0;
+      wCombat = dRatio * (1.0 - wCrisis);
+      wFarm = (1.0 - wCombat) * (1.0 - wRetreat);
+    }
+
+    // 6. 【Phase 4 防呆 3: 防牆角力場抵消死鎖 (Wall-Corner Tangent Sliding)】
+    const bSq = borderX * borderX + borderY * borderY;
+    if (bSq > 0.0025 && wRetreat > 0.01) {
+      const bLen = Math.sqrt(bSq);
+      const bnx = borderX / bLen;
+      const bny = borderY / bLen;
+
+      const rSq = retreatX * retreatX + retreatY * retreatY;
+      if (rSq > 0.001) {
+        const rLen = Math.sqrt(rSq);
+        const rnx = retreatX / rLen;
+        const rny = retreatY / rLen;
+
+        const dot = rnx * bnx + rny * bny;
+        if (dot < -0.5) {
+          // 後撤力與邊界排斥力劇烈對立！轉化為沿邊界切線方向滑動
+          let tx = -bny;
+          let ty = bnx;
+          // 依據 AI 當前環繞走位方向決定滑動切線，維持時間連續性杜絕幀間抽搐
+          if (bot.aiStrafeDirection < 0) {
+            tx = -tx;
+            ty = -ty;
+          }
+          retreatX = tx * rLen;
+          retreatY = ty * rLen;
+        }
+      }
+    }
+
+    // 7. 合成力場並正規化
+    let mx =
+      combatX * wCombat +
+      retreatX * wRetreat +
+      farmX * wFarm +
+      evadeX +
+      borderX;
+    let my =
+      combatY * wCombat +
+      retreatY * wRetreat +
+      farmY * wFarm +
+      evadeY +
+      borderY;
+
     const magSq = mx * mx + my * my;
     if (magSq > 1.0) {
       const invMag = 1.0 / Math.sqrt(magSq);
-      bot.input.moveX = mx * invMag;
-      bot.input.moveY = my * invMag;
+      mx *= invMag;
+      my *= invMag;
+    }
+
+    // 8. 向量力場平滑漸變 (EMA Smoothing, 零 GC)，消除單幀 180 度階躍反轉抖動 (Jitter)
+    const prevMx = bot.input.moveX;
+    const prevMy = bot.input.moveY;
+    if (prevMx * prevMx + prevMy * prevMy > 0.001) {
+      const blend = 0.65; // 65% 目標力場 + 35% 慣性力場平滑過渡
+      bot.input.moveX = prevMx * (1.0 - blend) + mx * blend;
+      bot.input.moveY = prevMy * (1.0 - blend) + my * blend;
+    } else {
+      bot.input.moveX = mx;
+      bot.input.moveY = my;
     }
   }
 
-  // --- 輔助查詢純函式 (熱路徑零配置，無閉包無配置) ---
+  /**
+   * 【Phase 3 & Phase 4: 瞄準與射擊決策】
+   */
+  private decideAimAndShoot(
+    bot: Tank,
+    enemyTarget: Tank | null,
+    shapeTarget: Shape | null,
+    bulletPool: ObjectPool<Bullet>,
+  ): void {
+    // 優先權 A: 【Phase 3 攔截提前量】高威脅子彈攔截鎖定
+    if (
+      bot.aiInterceptTimer > 0 &&
+      bot.aiInterceptBulletIdx >= 0 &&
+      bot.aiInterceptBulletIdx < bulletPool.capacity &&
+      bulletPool.isActive(bot.aiInterceptBulletIdx)
+    ) {
+      const b = bulletPool.items[bot.aiInterceptBulletIdx];
+      const rx = b.x - bot.x;
+      const ry = b.y - bot.y;
+      const dist = Math.sqrt(rx * rx + ry * ry);
+      const vOwn = Math.max(bot.bulletSpeed, 12.27);
+      const vBullet = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+      const tClash = dist / (vOwn + vBullet + 0.001);
+
+      bot.input.aimX = b.x + b.vx * tClash;
+      bot.input.aimY = b.y + b.vy * tClash;
+      bot.input.shooting = true;
+      return;
+    }
+
+    // 優先權 B: 殘血撤退時的後座力火箭反衝加速
+    if (bot.aiState === 'retreating' && enemyTarget) {
+      bot.input.aimX = enemyTarget.x;
+      bot.input.aimY = enemyTarget.y;
+      bot.input.shooting = true;
+      return;
+    }
+
+    // 優先權 C: 戰鬥提前量預測瞄準 (Lead Aiming)
+    if (enemyTarget) {
+      const edx = enemyTarget.x - bot.x;
+      const edy = enemyTarget.y - bot.y;
+      const dist = Math.sqrt(edx * edx + edy * edy);
+      const bSpeed = Math.max(bot.bulletSpeed, 10);
+      const tHit = dist / bSpeed;
+
+      bot.input.aimX = enemyTarget.x + enemyTarget.vx * tHit;
+      bot.input.aimY = enemyTarget.y + enemyTarget.vy * tHit;
+      bot.input.shooting = true;
+      return;
+    }
+
+    // 優先權 D: 農怪瞄準
+    if (shapeTarget) {
+      bot.input.aimX = shapeTarget.x;
+      bot.input.aimY = shapeTarget.y;
+      bot.input.shooting = true;
+      return;
+    }
+
+    // 優先權 E: 平時巡航
+    bot.input.aimX = bot.x + bot.input.moveX * 100;
+    bot.input.aimY = bot.y + bot.input.moveY * 100;
+    bot.input.shooting = false;
+  }
+
+  // --- 輔助查詢純函式 (熱路徑零配置，含 1.25x 目標慣性效用加成) ---
 
   private findNearestEnemyTank(
     self: Tank,
@@ -429,6 +571,8 @@ export class AISystem {
     let bestTank: Tank | null = null;
     let minDistSq = maxRadius * maxRadius;
     const len = allTanks.length;
+    const stickinessSq =
+      AI_TARGET_STICKINESS_RATIO * AI_TARGET_STICKINESS_RATIO;
 
     for (let i = 0; i < len; i++) {
       const other = allTanks[i];
@@ -442,7 +586,16 @@ export class AISystem {
 
       const dx = other.x - self.x;
       const dy = other.y - self.y;
-      const d2 = dx * dx + dy * dy;
+      const rawDistSq = dx * dx + dy * dy;
+      if (rawDistSq > maxRadius * maxRadius) {
+        continue;
+      }
+
+      let d2 = rawDistSq;
+      // 【Phase 4: 1.25x 效用慣性】：若為當前已鎖定目標，享有距離平方折扣，消除乒乓換鎖
+      if (other.id === self.aiTargetId) {
+        d2 /= stickinessSq;
+      }
 
       if (d2 < minDistSq) {
         minDistSq = d2;
@@ -461,6 +614,8 @@ export class AISystem {
     let bestShape: Shape | null = null;
     let minDistSq = maxRadius * maxRadius;
     const len = shapes.length;
+    const stickinessSq =
+      AI_TARGET_STICKINESS_RATIO * AI_TARGET_STICKINESS_RATIO;
 
     for (let i = 0; i < len; i++) {
       const shape = shapes[i];
@@ -468,7 +623,16 @@ export class AISystem {
 
       const dx = shape.x - self.x;
       const dy = shape.y - self.y;
-      const d2 = dx * dx + dy * dy;
+      const rawDistSq = dx * dx + dy * dy;
+      if (rawDistSq > maxRadius * maxRadius) {
+        continue;
+      }
+
+      let d2 = rawDistSq;
+      // 【Phase 4: 1.25x 效用慣性】：當前鎖定之形狀享有慣性折扣
+      if (shape.id === self.aiTargetShapeId) {
+        d2 /= stickinessSq;
+      }
 
       if (d2 < minDistSq) {
         minDistSq = d2;
@@ -477,39 +641,5 @@ export class AISystem {
     }
 
     return bestShape;
-  }
-
-  private findShapeById(id: number, shapes: Shape[]): Shape | null {
-    if (id < 0) return null;
-    const len = shapes.length;
-    for (let i = 0; i < len; i++) {
-      if (shapes[i].id === id && shapes[i].active) {
-        return shapes[i];
-      }
-    }
-    return null;
-  }
-
-  private findTankById(id: number, allTanks: Tank[]): Tank | null {
-    if (id < 0) return null;
-    const len = allTanks.length;
-    for (let i = 0; i < len; i++) {
-      if (allTanks[i].id === id && allTanks[i].active) {
-        return allTanks[i];
-      }
-    }
-    return null;
-  }
-
-  private dist(t1: Tank, t2: Tank): number {
-    const dx = t1.x - t2.x;
-    const dy = t1.y - t2.y;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-
-  private distToShape(t: Tank, s: Shape): number {
-    const dx = t.x - s.x;
-    const dy = t.y - s.y;
-    return Math.sqrt(dx * dx + dy * dy);
   }
 }

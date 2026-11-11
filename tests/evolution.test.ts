@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BASE_BULLET_SPEED } from '../src/config/constants';
 import type { TankClassId } from '../src/config/tanks.config';
 import { EventBus } from '../src/core/EventBus';
 import { ObjectPool } from '../src/core/ObjectPool';
@@ -96,7 +97,7 @@ describe('Milestone 4a: Evolution & Class Specialization', () => {
     const bullet = bulletPool.items[0];
 
     // Sniper 子彈速度為 1.5x
-    const expectedVx = (184 / 15) * 1.5;
+    const expectedVx = BASE_BULLET_SPEED * 1.5;
     expect(bullet.vx).toBeCloseTo(expectedVx, 2);
   });
 

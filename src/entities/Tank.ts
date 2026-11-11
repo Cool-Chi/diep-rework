@@ -45,6 +45,8 @@ export class Tank {
   public aiTargetShapeId = -1; // 當前鎖定之形狀 ID (農怪防抖)
   public aiTargetStickinessTimer = 0; // 當前形狀已鎖定 ticks
   public aiCurrentAimAngle = 0; // AI 當前虛擬砲管朝向弧度 (用於擬人化平滑旋轉)
+  public aiInterceptBulletIdx = -1; // 當前鎖定攔截之子彈索引 (Pool Index)
+  public aiInterceptTimer = 0; // 攔截鎖定維持 ticks (預設 10 ticks 防抖)
 
   // 扁平世界座標（唯一真值，以 25 單位/格為基準）
   public x: number;
@@ -71,7 +73,7 @@ export class Tank {
   public bodyDamage = 20; // 撞擊傷害基準 (對形狀: (p=0: (0+5)*4))
   public bodyDamageToTank = 30; // 撞擊傷害基準 (對坦克: (p=0: (0+5)*6))
   public bodyDamageToBullet = 5; // 撞擊傷害基準 (對子彈: (p=0: p+5))
-  public bulletHp = 2; // 子彈生命值 (穿透力)
+  public bulletHp = 1.2; // 子彈生命值 (穿透力，原版基準 1.2)
   public bulletDamage = 7; // 子彈殺傷力
   public reloadTicks = 15; // 射擊裝填間隔 ticks
   public bulletSpeed: number = BASE_BULLET_SPEED; // 子彈初速
@@ -151,6 +153,8 @@ export class Tank {
     this.lastBodyContactTick = 0;
     this.rotation = 0;
     this.prevRotation = 0;
+    this.aiInterceptBulletIdx = -1;
+    this.aiInterceptTimer = 0;
     this.resetBarrelCooldowns();
     this.barrelRecoils.fill(0);
     this.prevBarrelRecoils.fill(0);

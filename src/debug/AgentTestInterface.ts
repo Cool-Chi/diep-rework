@@ -1,4 +1,7 @@
 import {
+  AI_ARENA_CENTER_X,
+  AI_ARENA_CENTER_Y,
+  AI_ARENA_SIZE,
   BASE_BULLET_RADIUS,
   BASE_BULLET_SPEED,
   BULLET_LIFESPAN_TICKS,
@@ -31,9 +34,9 @@ export interface BulletPreset {
 export const BULLET_PRESETS: Record<TestBulletType, BulletPreset> = {
   basic: {
     radius: BASE_BULLET_RADIUS, // 9
-    hp: 2,
+    hp: 1.2,
     damage: 7,
-    speed: BASE_BULLET_SPEED, // 12.27
+    speed: BASE_BULLET_SPEED, // 9.2
     color: COLOR_TANK_BLUE, // 0x00b2e1
   },
   destroyer: {
@@ -179,6 +182,215 @@ export class AgentTestInterface {
     this.game.shapeSystem.isAutoFillPaused = false;
     this.game.shapeSystem.fillToTarget();
     this.game.spawnSystem.init(this.game.playerTank);
+  }
+
+  public isAiDuelActive = false;
+  public duelBotAlpha: Tank | null = null;
+  public duelBotBeta: Tank | null = null;
+  public duelClassAlpha: TankClassId = 'twin';
+  public duelClassBeta: TankClassId = 'destroyer';
+  private duelRespawnTimerA = 0;
+  private duelRespawnTimerB = 0;
+
+  /**
+   * 啟動小型 AI 決鬥對戰沙盒 (AI vs AI Small Duel Arena)
+   * 限制在 1200x1200 競技場內，生成 Bot Alpha (Twin) 與 Bot Beta (Destroyer) 進行自主決鬥
+   */
+  public startAiDuelSandbox(
+    classA: TankClassId = 'twin',
+    classB: TankClassId = 'destroyer',
+    isGodMode = true,
+  ): void {
+    if (this.isSandboxActive) {
+      this.stopBulletSandbox();
+    }
+
+    this.isAiDuelActive = true;
+    this.duelClassAlpha = classA;
+    this.duelClassBeta = classB;
+    this.duelRespawnTimerA = 0;
+    this.duelRespawnTimerB = 0;
+
+    // 1. 設定 AI 專屬競技場邊界
+    const half = AI_ARENA_SIZE * 0.5;
+    this.game.aiSystem.arenaBounds = {
+      minX: AI_ARENA_CENTER_X - half,
+      maxX: AI_ARENA_CENTER_X + half,
+      minY: AI_ARENA_CENTER_Y - half,
+      maxY: AI_ARENA_CENTER_Y + half,
+    };
+
+    // 2. 暫停全圖形狀與 AI 自動生成
+    this.game.spawnSystem.isSpawningPaused = true;
+    this.game.spawnSystem.clearAllAi();
+    this.game.shapeSystem.isAutoFillPaused = true;
+    this.game.shapeSystem.clearAll();
+    this.clearAllBullets();
+
+    // 3. 玩家置於觀戰位置並無敵
+    this.game.playerTank.isGodMode = true;
+    this.game.playerTank.hp = this.game.playerTank.maxHp;
+    this.game.playerTank.x = AI_ARENA_CENTER_X;
+    this.game.playerTank.y = AI_ARENA_CENTER_Y - half + 120;
+    this.game.playerTank.vx = 0;
+    this.game.playerTank.vy = 0;
+    this.game.aiSystem.ignorePlayer = true;
+
+    // 4. 配置 Bot Alpha
+    const botA = this.game.spawnSystem.aiTanks[0];
+    if (botA) {
+      this.setupDuelBot(
+        botA,
+        classA,
+        'Bot Alpha',
+        AI_ARENA_CENTER_X - 260,
+        AI_ARENA_CENTER_Y,
+        0,
+        0x00b2e1,
+        isGodMode,
+      );
+      this.duelBotAlpha = botA;
+    }
+
+    // 5. 配置 Bot Beta
+    const botB = this.game.spawnSystem.aiTanks[1];
+    if (botB) {
+      this.setupDuelBot(
+        botB,
+        classB,
+        'Bot Beta',
+        AI_ARENA_CENTER_X + 260,
+        AI_ARENA_CENTER_Y,
+        Math.PI,
+        0xfc7677,
+        isGodMode,
+      );
+      this.duelBotBeta = botB;
+    }
+  }
+
+  private setupDuelBot(
+    bot: Tank,
+    tankClass: TankClassId,
+    name: string,
+    x: number,
+    y: number,
+    rot: number,
+    color: number,
+    isGodMode: boolean,
+  ): void {
+    const def = TANKS_CONFIG[tankClass] ?? TANKS_CONFIG.basic;
+    bot.respawn(x, y);
+    bot.name = `${name} (${tankClass})`;
+    bot.setClass(def);
+    bot.level = Math.max(1, def.requiredLevel);
+    bot.color = color;
+    bot.isAi = true;
+    bot.isGodMode = isGodMode;
+    bot.invulnerableTicks = 0;
+    bot.active = true;
+    bot.rotation = rot;
+    bot.prevRotation = rot;
+    recomputeDerivedStats(bot);
+    bot.hp = bot.maxHp;
+  }
+
+  /**
+   * 退出 AI 決鬥對戰沙盒
+   */
+  public stopAiDuelSandbox(): void {
+    this.isAiDuelActive = false;
+    this.duelBotAlpha = null;
+    this.duelBotBeta = null;
+    this.game.aiSystem.arenaBounds = null;
+
+    this.clearAllBullets();
+    this.game.spawnSystem.isSpawningPaused = false;
+    this.game.shapeSystem.isAutoFillPaused = false;
+    this.game.shapeSystem.fillToTarget();
+    this.game.spawnSystem.init(this.game.playerTank);
+  }
+
+  /**
+   * 切換決鬥職業
+   */
+  public setAiDuelClasses(classA: TankClassId, classB: TankClassId): void {
+    this.duelClassAlpha = classA;
+    this.duelClassBeta = classB;
+    if (!this.isAiDuelActive) {
+      this.startAiDuelSandbox(classA, classB);
+      return;
+    }
+    if (this.duelBotAlpha) {
+      const defA = TANKS_CONFIG[classA] ?? TANKS_CONFIG.twin;
+      this.duelBotAlpha.setClass(defA);
+      this.duelBotAlpha.name = `Bot Alpha (${classA})`;
+      this.duelBotAlpha.level = Math.max(1, defA.requiredLevel);
+      recomputeDerivedStats(this.duelBotAlpha);
+      this.duelBotAlpha.hp = this.duelBotAlpha.maxHp;
+    }
+    if (this.duelBotBeta) {
+      const defB = TANKS_CONFIG[classB] ?? TANKS_CONFIG.destroyer;
+      this.duelBotBeta.setClass(defB);
+      this.duelBotBeta.name = `Bot Beta (${classB})`;
+      this.duelBotBeta.level = Math.max(1, defB.requiredLevel);
+      recomputeDerivedStats(this.duelBotBeta);
+      this.duelBotBeta.hp = this.duelBotBeta.maxHp;
+    }
+  }
+
+  /**
+   * 切換決鬥 AI 的無敵狀態
+   */
+  public toggleAiDuelGodMode(): boolean {
+    const next = !(this.duelBotAlpha?.isGodMode ?? false);
+    if (this.duelBotAlpha) this.duelBotAlpha.isGodMode = next;
+    if (this.duelBotBeta) this.duelBotBeta.isGodMode = next;
+    return next;
+  }
+
+  /**
+   * 每 tick 維持決鬥雙方自動滿血或復活（若未開無敵）
+   */
+  public updateAiDuel(_currentTick: number): void {
+    if (!this.isAiDuelActive) return;
+
+    // 確保旁觀玩家無敵
+    this.game.playerTank.hp = this.game.playerTank.maxHp;
+
+    if (this.duelBotAlpha && !this.duelBotAlpha.active) {
+      this.duelRespawnTimerA++;
+      if (this.duelRespawnTimerA >= 25) {
+        this.duelRespawnTimerA = 0;
+        this.setupDuelBot(
+          this.duelBotAlpha,
+          this.duelClassAlpha,
+          'Bot Alpha',
+          AI_ARENA_CENTER_X - 260,
+          AI_ARENA_CENTER_Y,
+          0,
+          0x00b2e1,
+          this.duelBotAlpha.isGodMode,
+        );
+      }
+    }
+
+    if (this.duelBotBeta && !this.duelBotBeta.active) {
+      this.duelRespawnTimerB++;
+      if (this.duelRespawnTimerB >= 25) {
+        this.duelRespawnTimerB = 0;
+        this.setupDuelBot(
+          this.duelBotBeta,
+          this.duelClassBeta,
+          'Bot Beta',
+          AI_ARENA_CENTER_X + 260,
+          AI_ARENA_CENTER_Y,
+          Math.PI,
+          0xfc7677,
+          this.duelBotBeta.isGodMode,
+        );
+      }
+    }
   }
 
   /**

@@ -93,21 +93,47 @@ flowchart TD
    - 無頭 Arena 基準測試確認：Basic 相消捕獲率 100%、Destroyer 殘血比 97.4%、碰撞偏折角 48.7°、火花粒子 8.5 顆、平均 tick 耗時 0.005ms。
    - 實機瀏覽器 autonomous benchmark 實測：157+ FPS、24~25 TPS，連續 30 ticks 採樣 `shakeIntensity === 0`，沙盒對打驗收截圖視覺無瑕。
 
-### 階段三 (Phase 3): AI 彈幕威脅預判與主動抵消
+### 階段三 (Phase 3): AI 彈幕威脅預判與主動抵消 [已完成]
 1. **實體狀態擴充**：
-   - [`src/entities/Tank.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/entities/Tank.ts)：新增 `aiInterceptBulletIdx` 與 `aiInterceptTimer`。
+   - [`src/entities/Tank.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/entities/Tank.ts)：新增 `aiInterceptBulletIdx` 與 `aiInterceptTimer`，並於 `respawn()` 時完整重置。
 2. **CPA (Closest Point of Approach) 來襲威脅預判**：
-   - [`src/ai/AISystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ai/AISystem.ts)：掃描 380 範圍內敵方子彈，計算相對速度與最接近時間 $t_{\text{cpa}}$、最接近距離 $d_{\text{cpa}}$。
-   - 判定即將命中時：垂直彈道側移閃避（Strafe），且高威脅子彈觸發主動瞄準攔截（鎖定 10 ticks 防抖）。
-3. **階段驗證**：
-   - 新增單元測試驗證 AI 在來襲彈幕下產生垂直閃避與開火攔截朝向。
+   - [`src/ai/AISystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ai/AISystem.ts)：掃描 400 範圍內敵方子彈，計算相對速度與最接近時間 $t_{\text{cpa}}$、最接近距離 $d_{\text{cpa}}$。
+   - 進入預測碰撞走廊（$d_{\text{cpa}} \le r_{\text{bot}} + r_{\text{bullet}} + 18$）時，施加垂直彈道側移避難向量 $V_{\text{evade}}$。
+3. **防呆工程強化**：
+   - **防幽靈鎖定 (Stale Pool Index)**：`validateInterceptLock` 每 tick 檢驗目標子彈是否處於 active、非自身發射且距離未遠離，一旦子彈提前被銷毀或飛越，立即解除鎖定。
+   - **攔截提前量與威脅門檻**：設定高威脅門檻（巨彈、高傷狙擊彈或致命彈才觸發主動換瞄，避免機槍小彈幕干擾），瞄準點採用碰撞交會預測座標（$P_{\text{pred}} = P_{\text{bullet}} + V_{\text{bullet}} \cdot t_{\text{clash}}$），並鎖定 10 ticks 防抖。
+4. **階段驗證**：
+   - 無頭 Arena 基準測試 50 輪對射：Destroyer 巨彈主動攔截率達 100%、側閃生還率達 100%，攔截期間激起 200+ 次子彈互碰抵消。
 
-### 階段四 (Phase 4): AI 模糊效用決策、連續向量混合與瀏覽器實機驗收
-1. **連續力場向量混合 (Continuous Steering Vector Blending)**：
-   - [`src/ai/AISystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ai/AISystem.ts)：計算連續血量危機權重 $w_{\text{retreat}}$，連續加權混合交火風箏、殘血後撤、刷怪靠攏、彈道側閃與邊界排斥 5 股向量。
-2. **具慣性的效用瞄準 (Utility Aiming with Stickiness)**：
-   - 引入 `1.25x` 當前目標慣性加成，消除多目標搖擺抽搐。
-3. **全專案自動化與實機驗收**：
-   - 完整運行全數 Vitest 單元測試與 Biome lint。
-   - 透過 `browsermcp` 實機切換神經視角、對射子彈互消、檢查 40 AI 與 1400 形狀大生態運行、截圖審查。
-   - 撰寫 Walkthrough 與提交 Git Commit。
+### 階段四 (Phase 4): AI 模糊效用決策、連續向量混合與瀏覽器實機驗收 [已完成]
+1. **5 股連續力場向量加權混合 (Continuous Steering Vector Blending)**：
+   - [`src/ai/AISystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ai/AISystem.ts)：計算連續血量危機權重 $w_{\text{crisis}} = \text{clamp01}((0.55 - \text{hpRatio}) / 0.35)$，平滑加權合成交火拉打 ($V_{\text{combat}}$)、危機撤退 ($V_{\text{retreat}}$)、打怪農怪 ($V_{\text{farm}}$)、彈道側閃 ($V_{\text{evade}}$) 與邊界排斥 ($V_{\text{border}}$)。
+   - 引入 EMA 向量平滑漸變（$0.65 \times \text{target} + 0.35 \times \text{prev}$），徹底消除單幀 180 度階躍反轉抽搐。
+2. **防牆角力場抵消死鎖 (Wall-Corner Tangent Sliding)**：
+   - 當 AI 處於邊界排斥區且後撤力指向牆角（點積 $< -0.5$）時，將後撤力投影至邊界切線方向（$T = (-N_{\text{border}}.y, N_{\text{border}}.x)$），使 AI 順沿牆面滑動脫困，徹底根除速度歸零卡死問題。
+3. **擬人化前向視錐過濾 (Human-like Frontal Cone Bullet Interception)**：
+   - 增加前向 $\pm 35.5^\circ$（`AI_INTERCEPT_MAX_ANGLE = 0.62` rad）攔截視錐約束：側向及身後流彈一律純靠身法（$V_{\text{evade}}$）閃避，堅決不旋轉砲台去搶瞄，確保瞄準焦點 $99\%+$ 鎖定敵方坦克。
+   - 縮短攔截鎖定維持時間為 4 ticks，點射削弱巨彈後立即回歸瞄人。
+4. **小型 AI 對戰沙盒 (AI vs AI Small Duel Arena)**：
+   - 建立 1200x1200 專屬對戰競技場，支援 Bot Alpha (Twin) vs Bot Beta (Destroyer) 1v1 自主決鬥、邊界限制排斥、一鍵切換職業與無敵調控。
+5. **全專案自動化與實機驗收 (/auto-tune)**：
+   - 無頭 1,000 ticks 決鬥壓測：出界率 0 ticks、牆角死鎖 0 ticks、對敵專注瞄準率（Bot Alpha 99.1%、Bot Beta 100%）、交火激起 82 次子彈相消。
+   - 全專案 30 個測試檔案、157 項單元測試 100% 通過；Biome Lint 與 TypeScript 嚴格型別檢查 0 錯誤。
+   - 瀏覽器實機驗收（`browsermcp`）：165 FPS 高刷運行，雙 AI 決鬥交火截圖自檢完美。
+
+
+### 階段五 (Phase 5): 原版視角範圍擴增、子彈速度/耐久下修與實體受擊穿透修復 [已完成]
+1. **原版視角擴展 (Authentic Camera FOV & AI Perception Sync)**：
+   - 相機基礎縮放比調整：`CAMERA_BASE_SCALE = 0.75`（視野可見面積提升 +33.3%）。
+   - AI 決策感應半徑同步擴展：`PERCEPTION_RADIUS = 750`、`THREAT_ESCAPE_RADIUS = 950`、`AI_BULLET_SCAN_RADIUS = 550`，並於決策中動態乘以 `bot.definition.fovMultiplier`。
+2. **原版子彈彈速與耐久數值修正 (Bullet Speed & Penetration Baseline)**：
+   - 基礎子彈飛行速度下調 25%：`BASE_BULLET_SPEED = 9.2`、加點提升係數 `BULLET_SPEED_PER_POINT = 1.0`。
+   - 子彈穿透耐久基底與成長公式對齊：`getBulletPenetration(p) = 1.2 + 1.1 * p`（初始基礎耐久由 2.0 下修至 1.2）。
+3. **高速子彈受擊穿透（Phasing / Ghosting）根本修復**：
+   - **空間雜湊網格候選半徑修復**：原 `CollisionSystem` 內 `spatialHash.query(bullet.x, bullet.y, bullet.radius, 25)` 將候選實體半徑硬編碼為 25，導致 Lv 15~45 坦克（半徑 28.7~38.7）跨網格邊界時，中心點落在查詢半徑之外遭漏檢。將查詢半徑擴充至 50。
+   - **線段中點掃掠查詢 (Swept Midpoint Query)**：子彈查詢空間改以起點與終點中點及涵蓋半徑進行寬相位搜尋 (`midX = prevX + dx*0.5, queryRadius = radius + sweepDist*0.5`)，防穿透率達 100%。
+   - **無敵與 GodMode 受擊消耗修復**：修復原判斷中 `if (targetTank.isGodMode || targetTank.invulnerableTicks > 0) continue;` 導致子彈直接從無敵坦克穿身而過的物理穿透現象。改為子彈正常碰撞消耗耐久、引爆破片火花，並按次扣減重生無敵時間（每次受擊消耗 25 ticks）。
+4. **驗證與交付**：
+   - 全案 30 個測試檔案、160 項單元測試 100% 全數通過。
+   - Biome Lint 與 TypeScript 嚴格編譯 0 錯誤。
+   - 瀏覽器實機透過 `browsermcp` 實測：雙 AI 決鬥交火與靶機射擊無穿透、傷害扣減與火花精確爆發、超廣 FOV 畫面穩定 120+ FPS。

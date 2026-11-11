@@ -267,8 +267,8 @@ describe('Milestone 5: AISystem (Tactical Bot Decision & Combat)', () => {
     expect(bot.input.shooting).toBe(true); // 火箭反衝開火
     expect(bot.input.moveX).toBeLessThan(0); // 遠離敵人
 
-    // 2. 敵人遠離至 1800, 1000 (距離 800 > THREAT_ESCAPE_RADIUS 700)
-    enemy.x = 1800;
+    // 2. 敵人遠離至 2100, 1000 (距離 1100 > THREAT_ESCAPE_RADIUS 950)
+    enemy.x = 2100;
     aiSystem.update([bot], shapes, allTanks, bulletPool, 2);
     expect(bot.aiState).toBe('farming');
     expect(bot.input.shooting).toBe(true); // 立即農怪，不盲目飄移停火

@@ -25,7 +25,7 @@ describe('Derived Stats Computation and Synchronous Scaling (M3a)', () => {
     expect(tank.bodyDamage).toBe(20);
     expect(tank.bodyDamageToTank).toBe(30);
     expect(tank.bodyDamageToBullet).toBe(5);
-    expect(tank.bulletHp).toBe(2);
+    expect(tank.bulletHp).toBeCloseTo(1.2, 5);
     expect(tank.bulletDamage).toBe(7);
     expect(tank.reloadTicks).toBe(15);
     expect(tank.bulletSpeed).toBe(BASE_BULLET_SPEED);
@@ -79,10 +79,10 @@ describe('Derived Stats Computation and Synchronous Scaling (M3a)', () => {
     expect(tank.bodyDamage).toBe(48); // (7+5)*4
     expect(tank.bodyDamageToTank).toBe(72); // (7+5)*6
     expect(tank.bodyDamageToBullet).toBe(12); // 7+5
-    expect(tank.bulletHp).toBe(12.5); // 2 + 1.5*7
+    expect(tank.bulletHp).toBeCloseTo(8.9, 5); // 1.2 + 1.1*7
     expect(tank.bulletDamage).toBe(28); // 7 + 3*7
     expect(tank.reloadTicks).toBe(8); // 15 - 7
-    expect(tank.bulletSpeed).toBeCloseTo(328 / 15, 4); // Reddit 原版推導 328/15
+    expect(tank.bulletSpeed).toBeCloseTo(16.2, 4); // 9.2 + 1.0*7
     expect(tank.moveAccelScale).toBeGreaterThan(1.0);
   });
 });

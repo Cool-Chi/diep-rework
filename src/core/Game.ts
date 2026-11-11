@@ -101,6 +101,7 @@ export class Game {
   public playerKills = 0;
 
   public showAiDevLabels = false; // 是否在 AI 頭頂顯示戰術狀態標籤
+  public isInitialized = false; // 是否已完成 Pixi 與 DOM 渲染層初始化
 
   private readonly tempTankRenderPos: RenderPositionOut = { x: 0, y: 0 };
   private readonly tempVisibleBoundsTuple: [number, number, number, number] = [
@@ -119,6 +120,7 @@ export class Game {
 
     this.hud = new HUD(this.eventBus, () => this.respawnPlayer());
     this.levelingSystem = new LevelingSystem(this.eventBus, this.allTanks);
+    recomputeDerivedStats(this.playerTank);
     this.inputManager.eventBus = this.eventBus;
     this.inputManager.isOverUi = (x, y) => this.hud.isOverUi(x, y);
     this.inputManager.onPointerMove = (x, y) =>
@@ -282,7 +284,8 @@ export class Game {
       this.devOverlay = new DebugOverlay(this);
     }
 
-    // 8. 啟動主循環
+    // 8. 標記完成初始化並啟動主循環
+    this.isInitialized = true;
     this.loop.start();
   }
 
@@ -356,6 +359,9 @@ export class Game {
 
       // (g2) AI 坦克生態動態維持與重生佇列
       this.spawnSystem.update(this.currentTick, this.playerTank);
+      if (this.agentTest.isAiDuelActive) {
+        this.agentTest.updateAiDuel(this.currentTick);
+      }
 
       // (g3) 玩家活躍時間計時與粒子生命週期推進
       if (this.playerTank.active) {
@@ -404,55 +410,55 @@ export class Game {
     this.camera.update(dtSeconds);
     const visibleBounds = this.camera.getVisibleBounds();
 
-    // ④ 套用 worldContainer 變換（確保後續更新與視錐剔除使用當幀最新相機狀態）
-    this.renderer.updateCamera(this.camera);
+    if (this.isInitialized) {
+      // ④ 套用 worldContainer 變換（確保後續更新與視錐剔除使用當幀最新相機狀態）
+      this.renderer.updateCamera(this.camera);
 
-    // ⑤ 更新世界內所有 Sprite（多坦克、形狀、子彈與血條）
-    const renderStartTime = performance.now();
-    const mouseWorld = this.camera.screenToWorld(
-      this.inputManager.mouseScreenX,
-      this.inputManager.mouseScreenY,
-    );
-    this.playerTank.input.aimX = mouseWorld.x;
-    this.playerTank.input.aimY = mouseWorld.y;
+      // ⑤ 更新世界內所有 Sprite（多坦克、形狀、子彈與血條）
+      const renderStartTime = performance.now();
+      const mouseWorld = this.camera.screenToWorld(
+        this.inputManager.mouseScreenX,
+        this.inputManager.mouseScreenY,
+      );
+      this.playerTank.input.aimX = mouseWorld.x;
+      this.playerTank.input.aimY = mouseWorld.y;
 
-    this.multiTankRenderer.update(
-      this.allTanks,
-      alpha,
-      visibleBounds,
-      this.showAiDevLabels,
-      this.camera.isGodView,
-      this.camera.scale,
-    );
-    this.shapeRenderer.update(this.shapeSystem.shapes, alpha, visibleBounds);
-    this.bulletRenderer.update(this.bulletPool, alpha, visibleBounds);
-    this.particleRenderer.update(this.particlePool, alpha, visibleBounds);
-    this.healthBarRenderer.update(
-      this.allTanks,
-      this.shapeSystem.shapes,
-      alpha,
-      visibleBounds,
-    );
-    const renderDuration = performance.now() - renderStartTime;
+      this.multiTankRenderer.update(
+        this.allTanks,
+        alpha,
+        visibleBounds,
+        this.showAiDevLabels,
+        this.camera.isGodView,
+        this.camera.scale,
+      );
+      this.shapeRenderer.update(this.shapeSystem.shapes, alpha, visibleBounds);
+      this.bulletRenderer.update(this.bulletPool, alpha, visibleBounds);
+      this.particleRenderer.update(this.particlePool, alpha, visibleBounds);
+      this.healthBarRenderer.update(
+        this.allTanks,
+        this.shapeSystem.shapes,
+        alpha,
+        visibleBounds,
+      );
+      const renderDuration = performance.now() - renderStartTime;
 
-    // ⑥ 更新 HUD（排行榜、小地圖、分數列等）
-    const hudStartTime = performance.now();
-    this.hud.update(
-      this.playerTank,
-      alpha,
-      this.camera,
-      dtSeconds,
-      this.allTanks,
-    );
-    const hudDuration = performance.now() - hudStartTime;
+      // ⑥ 更新 HUD（排行榜、小地圖、分數列等）
+      const hudStartTime = performance.now();
+      this.hud.update(
+        this.playerTank,
+        alpha,
+        this.camera,
+        dtSeconds,
+        this.allTanks,
+      );
+      const hudDuration = performance.now() - hudStartTime;
 
-    // ⑦ render（由 Pixi Application 渲染循環在幀末自動執行）
-
-    // 更新除錯面板指標
-    if (this.devOverlay) {
-      this.devOverlay.recordRenderDuration(renderDuration);
-      this.devOverlay.recordHudDuration(hudDuration);
-      this.devOverlay.update();
+      // 更新除錯面板指標
+      if (this.devOverlay) {
+        this.devOverlay.recordRenderDuration(renderDuration);
+        this.devOverlay.recordHudDuration(hudDuration);
+        this.devOverlay.update();
+      }
     }
   }
 

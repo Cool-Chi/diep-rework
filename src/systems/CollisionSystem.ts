@@ -97,12 +97,19 @@ export class CollisionSystem {
       if (!bulletPool.isActive(b)) continue;
       const bullet = bulletPool.items[b];
 
-      // 查詢子彈周圍可能候選目標
+      // 依據子彈移動軌跡中點與位移半徑進行掃掠式空間雜湊查詢，防高速穿透與大體型坦克漏檢
+      const sweepDx = bullet.x - bullet.prevX;
+      const sweepDy = bullet.y - bullet.prevY;
+      const sweepDist = Math.sqrt(sweepDx * sweepDx + sweepDy * sweepDy);
+      const midX = bullet.prevX + sweepDx * 0.5;
+      const midY = bullet.prevY + sweepDy * 0.5;
+      const queryRadius = bullet.radius + sweepDist * 0.5;
+
       const candidateCount = this.spatialHash.query(
-        bullet.x,
-        bullet.y,
-        bullet.radius,
-        25,
+        midX,
+        midY,
+        queryRadius,
+        50, // 最大候選實體半徑涵蓋 Lv 45 巨型坦克 (半徑 ~40) 與大型形狀
       );
 
       for (let c = 0; c < candidateCount; c++) {
@@ -179,13 +186,8 @@ export class CollisionSystem {
             }
           }
 
-          // 同源子彈免疫、重生無敵保護與上帝無敵模式
-          if (
-            !targetTank?.active ||
-            targetTank.id === bullet.ownerId ||
-            targetTank.invulnerableTicks > 0 ||
-            targetTank.isGodMode
-          ) {
+          // 非活躍或自身發射之子彈免疫
+          if (!targetTank?.active || targetTank.id === bullet.ownerId) {
             continue;
           }
 
@@ -204,23 +206,34 @@ export class CollisionSystem {
             const factor = Math.min(1.0, bullet.hp / dTargetToBullet);
             const damageDealt = bullet.damage * factor;
 
+            // 子彈撞擊實體必然受反傷損耗或銷毀，杜絕穿透幽靈彈
             bullet.hp -= dTargetToBullet;
             if (bullet.hp <= 0) {
               bullet.active = false;
               bulletPool.release(b);
             }
 
-            targetTank.hp -= damageDealt;
-            targetTank.lastDamageTick = currentTick;
             eventBus.emitBulletHit(bullet.x, bullet.y, bullet.color);
 
-            if (targetTank.hp <= 0) {
-              targetTank.active = false;
-              eventBus.emitTankDied(
-                targetTank.id,
-                bullet.ownerId,
-                targetTank.x,
-                targetTank.y,
+            // 若目標非處於無敵保護狀態，正常扣除坦克生命
+            if (!targetTank.isGodMode && targetTank.invulnerableTicks <= 0) {
+              targetTank.hp -= damageDealt;
+              targetTank.lastDamageTick = currentTick;
+
+              if (targetTank.hp <= 0) {
+                targetTank.active = false;
+                eventBus.emitTankDied(
+                  targetTank.id,
+                  bullet.ownerId,
+                  targetTank.x,
+                  targetTank.y,
+                );
+              }
+            } else if (targetTank.invulnerableTicks > 0) {
+              // 受擊時提前消耗護盾 ticks，避免站立 AI 長時間無敵
+              targetTank.invulnerableTicks = Math.max(
+                0,
+                targetTank.invulnerableTicks - 25,
               );
             }
           }

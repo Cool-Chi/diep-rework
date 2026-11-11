@@ -38,9 +38,9 @@ describe('Stats Config Formula Golden Values', () => {
     expect(getBodyDamage(7, 'bullet')).toBe(12);
   });
 
-  it('子彈穿透力 (子彈生命) 驗證 (2 -> 12.5)', () => {
-    expect(getBulletPenetration(0)).toBe(2);
-    expect(getBulletPenetration(7)).toBe(12.5);
+  it('子彈穿透力 (子彈生命) 驗證 (1.2 -> 8.9)', () => {
+    expect(getBulletPenetration(0)).toBeCloseTo(1.2, 5);
+    expect(getBulletPenetration(7)).toBeCloseTo(8.9, 5);
   });
 
   it('子彈殺傷力驗證 (7 -> 28，次級目標 x 0.25)', () => {
@@ -62,9 +62,9 @@ describe('Stats Config Formula Golden Values', () => {
     expect(sizeFactor(30)).toBe(1.01 ** 29);
   });
 
-  it('子彈速度公式驗證 (184/15 -> 328/15)', () => {
-    expect(getBulletSpeed(0)).toBeCloseTo(184 / 15, 5);
-    expect(getBulletSpeed(7)).toBeCloseTo(328 / 15, 5);
+  it('子彈速度公式驗證 (9.2 -> 16.2)', () => {
+    expect(getBulletSpeed(0)).toBeCloseTo(9.2, 5);
+    expect(getBulletSpeed(7)).toBeCloseTo(16.2, 5);
   });
 
   it('生命自然回復公式驗證 (含 Hyper Regen)', () => {

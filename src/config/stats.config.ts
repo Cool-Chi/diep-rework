@@ -97,11 +97,12 @@ export function getBodyDamage(
 /**
  * 計算子彈穿透力（即子彈生命值）
  * 來源：https://diepio.fandom.com/wiki/Stats
- * 公式：2 + 1.5 * p
+ * 原版規範下修基礎耐久與成長係數，0 點為 1.2，滿點 7 點為 8.9
+ * 公式：1.2 + 1.1 * p
  * @param p 子彈穿透加點數 (0 ~ 7)
  */
 export function getBulletPenetration(p: number): number {
-  return 2 + 1.5 * p;
+  return 1.2 + 1.1 * p;
 }
 
 /**

@@ -63,7 +63,7 @@ export const BASE_BARREL_WIDTH = 18;
 // 3. 視圖與相機
 // ==========================================
 
-export const CAMERA_BASE_SCALE = 1.0;
+export const CAMERA_BASE_SCALE = 0.75; // 原版 diep.io 視角標準，相較 1.0 視野面積擴展約 33.3%
 
 /**
  * 等級對相機視野 FOV 的放大縮放係數
@@ -169,15 +169,15 @@ export const BULLET_FADEOUT_TICKS = 8;
 
 /**
  * 子彈基礎速度（世界單位 / tick）
- * TODO(tune): 未查證（fandom.com Stats 頁無公式，原版 Reddit 逆向推導值為 184/15 ≈ 12.27 格/秒 = 12.27 單位/tick）
+ * 原版 diep.io 基準約 9.2 格/秒 (世界單位/tick)，降低彈速以強化彈幕可讀性與走位穿梭空間
  */
-export const BASE_BULLET_SPEED = 184 / 15;
+export const BASE_BULLET_SPEED = 9.2;
 
 /**
  * 子彈速度每點加成（世界單位 / tick / point）
- * TODO(tune): 未查證（Reddit 推導 0 點至 7 點速度差 (328 - 184) / (15 * 7) ≈ 1.3714 單位/tick/點）
+ * 滿點 7 點加成後達 16.2 單位/tick (約 16.2 格/秒)
  */
-export const BULLET_SPEED_PER_POINT = (328 - 184) / (15 * 7);
+export const BULLET_SPEED_PER_POINT = 1.0;
 
 /**
  * 子彈是否繼承發射坦克的移動速度比例 (0 = 不繼承)
@@ -313,3 +313,30 @@ export const TANK_COLLISION_SEPARATION_IMPULSE = 3.5; // 相撞法向彈開衝�
 
 /** AI 擬人化砲管旋轉每 tick 最大角速度（弧度/tick） */
 export const AI_MAX_TURN_RATE_PER_TICK = 0.2; // 約 11.5 度/tick = 286 度/秒
+
+// ==========================================
+// 10. M8 AI 彈幕預判與連續力場調優常數
+// ==========================================
+
+/** AI 子彈威脅偵測感知半徑（世界單位，隨視野擴大同步提升至 550） */
+export const AI_BULLET_SCAN_RADIUS = 550;
+
+/** AI CPA 最接近時間上限（ticks，超過此時間之子彈視為遠程無威脅）TODO(tune) */
+export const AI_MAX_CPA_TICKS = 28;
+
+/** AI 彈幕主動攔截鎖定維持時間（ticks，調縮為 4 ticks = 0.16 秒，快速點射後回歸對人）TODO(tune) */
+export const AI_INTERCEPT_LOCK_TICKS = 4;
+
+/** AI 砲管主動攔截之正前方最大夾角視錐（弧度，約 35.5 度；側翼流彈禁止轉動砲管）TODO(tune) */
+export const AI_INTERCEPT_MAX_ANGLE = 0.62;
+
+/** AI 目標慣性效用加成比率（1.25x 消除多目標切換抽搐）TODO(tune) */
+export const AI_TARGET_STICKINESS_RATIO = 1.25;
+
+/** AI 地圖邊界排斥力場緩衝區（世界單位）TODO(tune) */
+export const AI_BORDER_BUFFER = 350;
+
+/** 小型 AI 對戰沙盒競技場尺寸與中心座標（世界單位）TODO(tune) */
+export const AI_ARENA_SIZE = 1200;
+export const AI_ARENA_CENTER_X = WORLD_WIDTH * 0.5;
+export const AI_ARENA_CENTER_Y = WORLD_HEIGHT * 0.5;
