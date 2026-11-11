@@ -121,11 +121,16 @@ export class Game {
     this.playerTank.isGodMode = true; // 開局預設開啟無敵模式
     this.allTanks.push(this.playerTank, ...this.spawnSystem.aiTanks);
 
-    this.hud = new HUD(this.eventBus, () => this.respawnPlayer());
+    this.hud = new HUD(
+      this.eventBus,
+      () => this.respawnPlayer(),
+      () => this.toggleFreeCam(),
+    );
     this.levelingSystem = new LevelingSystem(this.eventBus, this.allTanks);
     recomputeDerivedStats(this.playerTank);
     this.inputManager.eventBus = this.eventBus;
     this.inputManager.isOverUi = (x, y) => this.hud.isOverUi(x, y);
+    this.inputManager.isFreeCamActive = () => this.camera.isFreeCam;
     this.inputManager.onPointerMove = (x, y) =>
       this.hud.handlePointerMove(x, y);
     this.inputManager.onToggleFreeCam = () => this.toggleFreeCam();
@@ -283,6 +288,8 @@ export class Game {
             e.clientY,
           );
           if (miniMapTarget) {
+            this.camera.isGodView = false;
+            this.camera.spectateTarget = null;
             this.camera.isFreeCam = true;
             this.camera.setFreeCamTarget(miniMapTarget.x, miniMapTarget.y);
             return;
@@ -420,7 +427,40 @@ export class Game {
     const renderX = this.tempTankRenderPos.x;
     const renderY = this.tempTankRenderPos.y;
 
-    // ③ Camera.update（使用插值後的坦克位置與視野縮放）
+    // ③ 自由相機鍵盤平移（支援 WASD、方向鍵與 Shift 加速）
+    if (this.camera.isFreeCam) {
+      let camMoveX = 0;
+      let camMoveY = 0;
+      if (this.inputManager.keyW) camMoveY -= 1;
+      if (this.inputManager.keyS) camMoveY += 1;
+      if (this.inputManager.keyA) camMoveX -= 1;
+      if (this.inputManager.keyD) camMoveX += 1;
+
+      if (camMoveX !== 0 || camMoveY !== 0) {
+        const len = Math.hypot(camMoveX, camMoveY);
+        camMoveX /= len;
+        camMoveY /= len;
+        const speedMultiplier = this.inputManager.keyShift ? 2.5 : 1.0;
+        const panSpeed = (1400 / this.camera.scale) * speedMultiplier;
+        const moveDist = panSpeed * dtSeconds;
+        this.camera.freeCamTargetX = Math.max(
+          0,
+          Math.min(
+            WORLD_WIDTH,
+            this.camera.freeCamTargetX + camMoveX * moveDist,
+          ),
+        );
+        this.camera.freeCamTargetY = Math.max(
+          0,
+          Math.min(
+            WORLD_HEIGHT,
+            this.camera.freeCamTargetY + camMoveY * moveDist,
+          ),
+        );
+      }
+    }
+
+    // ④ Camera.update（使用插值後的坦克位置與視野縮放）
     this.camera.targetLevel = this.playerTank.level;
     this.camera.fovMultiplier = this.playerTank.definition.fovMultiplier;
     this.camera.setTarget(renderX, renderY);
@@ -490,6 +530,8 @@ export class Game {
   public toggleGodView(): void {
     this.camera.isGodView = !this.camera.isGodView;
     if (this.camera.isGodView) {
+      this.camera.isFreeCam = false;
+      this.camera.spectateTarget = null;
       this.showAiDevLabels = true;
     }
   }
@@ -497,6 +539,8 @@ export class Game {
   public toggleFreeCam(): void {
     this.camera.isFreeCam = !this.camera.isFreeCam;
     if (this.camera.isFreeCam) {
+      this.camera.isGodView = false;
+      this.camera.spectateTarget = null;
       this.camera.setFreeCamTarget(this.camera.x, this.camera.y);
     }
   }
@@ -509,6 +553,7 @@ export class Game {
     this.camera.isFreeCam = false;
     this.camera.isGodView = false;
     this.camera.freeCamZoom = 1.0;
+    this.camera.spectateTarget = null;
     this.camera.teleport(this.playerTank.x, this.playerTank.y);
   }
 

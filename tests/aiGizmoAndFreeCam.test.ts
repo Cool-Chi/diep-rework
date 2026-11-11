@@ -192,5 +192,56 @@ describe('AI Persona Colors & FreeCam & Gizmo', () => {
       });
       expect(zoomFn).toHaveBeenCalledWith(0.85);
     });
+
+    it('should allow left mouse drag to pan camera and silence tank shooting when isFreeCamActive is true', () => {
+      const inputManager = new InputManager();
+      const panFn = vi.fn();
+      inputManager.onCameraPan = panFn;
+      inputManager.isFreeCamActive = () => true;
+
+      // Left mouse button down (button = 0) in FreeCam
+      // @ts-expect-error test mock
+      inputManager.handlePointerDown({ button: 0, clientX: 200, clientY: 200 });
+
+      // Moving mouse should trigger camera pan
+      // @ts-expect-error test mock
+      inputManager.handlePointerMove({ clientX: 230, clientY: 240 });
+      expect(panFn).toHaveBeenCalledWith(30, 40);
+
+      // Tank sample should have zero movement and zero shooting
+      const cmd = { moveX: 1, moveY: 1, aimX: 0, aimY: 0, shooting: true };
+      inputManager.keyW = true;
+      inputManager.keyD = true;
+      inputManager.sample(cmd, (x, y) => ({ x: x * 2, y: y * 2 }));
+
+      expect(cmd.moveX).toBe(0);
+      expect(cmd.moveY).toBe(0);
+      expect(cmd.shooting).toBe(false);
+
+      // Left mouse up ends panning
+      // @ts-expect-error test mock
+      inputManager.handlePointerUp({ button: 0 });
+      // @ts-expect-error test mock
+      inputManager.handlePointerMove({ clientX: 300, clientY: 300 });
+      expect(panFn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Camera FreeCam vs GodView Precedence', () => {
+    it('isFreeCam should take precedence over isGodView in scale and target', () => {
+      const camera = new Camera(4000, 4000);
+      camera.resize(1920, 1080);
+      camera.isGodView = true;
+      camera.isFreeCam = true;
+      camera.freeCamTargetX = 2500;
+      camera.freeCamTargetY = 3500;
+      camera.freeCamZoom = 1.5;
+
+      expect(camera.scale).toBeCloseTo(camera.baseScale * 1.5);
+
+      camera.setTarget(100, 100);
+      expect(camera.targetX).toBe(2500);
+      expect(camera.targetY).toBe(3500);
+    });
   });
 });

@@ -18,6 +18,8 @@ export class DebugOverlay {
   private element: HTMLDivElement | null = null;
   private metricsElement: HTMLDivElement | null = null;
   private isVisible = true;
+  private freeCamBtn: HTMLButtonElement | null = null;
+  private godViewBtn: HTMLButtonElement | null = null;
 
   // 效能採樣
   private frameCount = 0;
@@ -224,6 +226,19 @@ export class DebugOverlay {
       <div>IgnorePlayer: <b style="color:${this.game.aiSystem.ignorePlayer ? '#00ff88' : '#ff5555'}">${this.game.aiSystem.ignorePlayer ? 'ON' : 'OFF'}</b> | Sandbox: <b style="color:${this.game.agentTest.isSandboxActive ? '#00ff88' : '#888888'}">${this.game.agentTest.isSandboxActive ? `ON (${this.game.agentTest.sandboxDummyClass})` : 'OFF'}</b></div>
       <div>AI Duel: <b style="color:${this.game.agentTest.isAiDuelActive ? '#00ff88' : '#888888'}">${this.game.agentTest.isAiDuelActive ? `ON (${this.game.agentTest.duelClassAlpha} vs ${this.game.agentTest.duelClassBeta})` : 'OFF'}</b></div>
     `;
+
+    if (this.freeCamBtn) {
+      this.freeCamBtn.textContent = `FreeCam: ${this.game.camera.isFreeCam ? 'ON' : 'OFF'}`;
+      this.freeCamBtn.style.backgroundColor = this.game.camera.isFreeCam
+        ? '#1b4965'
+        : '#555555';
+    }
+    if (this.godViewBtn) {
+      this.godViewBtn.textContent = `GodView: ${this.game.camera.isGodView ? 'ON' : 'OFF'}`;
+      this.godViewBtn.style.backgroundColor = this.game.camera.isGodView
+        ? '#1b4965'
+        : '#555555';
+    }
   }
 
   private createDOM(): void {
@@ -352,6 +367,7 @@ export class DebugOverlay {
       this.game.camera.isFreeCam ? '#1b4965' : '#555555',
     );
     btnContainer.appendChild(freeCamBtn);
+    this.freeCamBtn = freeCamBtn;
 
     // AI 決策可視化開關按鈕
     const gizmoBtn = createBtn(
@@ -382,6 +398,7 @@ export class DebugOverlay {
       this.game.camera.isGodView ? '#1b4965' : '#555555',
     );
     btnContainer.appendChild(godViewBtn);
+    this.godViewBtn = godViewBtn;
 
     // 相機重設回玩家
     const resetCamBtn = createBtn(

@@ -3,6 +3,7 @@ import type { Camera } from '../core/Camera';
 import type { EventBus } from '../core/EventBus';
 import type { Tank } from '../entities/Tank';
 import { EvolutionPanel } from './EvolutionPanel';
+import { FreeCamBanner } from './FreeCamBanner';
 import { GameOverModal } from './GameOverModal';
 import { uiScale } from './hudMath';
 import { KillToast } from './KillToast';
@@ -13,7 +14,7 @@ import { StatUpgradePanel } from './StatUpgradePanel';
 
 /**
  * 根 HUD 容器與管理器 (All-in-Canvas UI)
- * 統一管理屬性升級面板、轉職卡牌面板、經驗分數條、排行榜、小地圖、擊殺廣播與死亡結算
+ * 統一管理屬性升級面板、轉職卡牌面板、經驗分數條、排行榜、小地圖、擊殺廣播、死亡結算與自由相機橫幅
  */
 export class HUD {
   public readonly container = new Container();
@@ -25,21 +26,28 @@ export class HUD {
   public readonly leaderboard = new Leaderboard();
   public readonly killToast = new KillToast();
   public readonly gameOverModal: GameOverModal;
+  public readonly freeCamBanner = new FreeCamBanner();
 
   public visible = true;
 
-  constructor(eventBus: EventBus, onRespawn?: () => void) {
+  constructor(
+    eventBus: EventBus,
+    onRespawn?: () => void,
+    onExitFreeCam?: () => void,
+  ) {
     this.statPanel = new StatUpgradePanel(eventBus);
     this.evolutionPanel = new EvolutionPanel(eventBus);
     this.gameOverModal = new GameOverModal(onRespawn);
+    this.freeCamBanner.onExit = onExitFreeCam ?? null;
 
-    // 依層次添加至 HUD 根容器（轉職面板在左上、屬性在左下、分數在底中、小地圖在右下、排行榜在右上、擊殺浮動與結算置頂）
+    // 依層次添加至 HUD 根容器
     this.container.addChild(this.statPanel.container);
     this.container.addChild(this.evolutionPanel.container);
     this.container.addChild(this.scoreBar.container);
     this.container.addChild(this.miniMap.container);
     this.container.addChild(this.leaderboard.container);
     this.container.addChild(this.killToast.container);
+    this.container.addChild(this.freeCamBanner.container);
     this.container.addChild(this.gameOverModal.container);
   }
 
@@ -54,6 +62,7 @@ export class HUD {
     this.miniMap.resize(screenWidth, screenHeight, scale);
     this.leaderboard.resize(screenWidth, screenHeight, scale);
     this.killToast.resize(screenWidth, screenHeight, scale);
+    this.freeCamBanner.resize(screenWidth, screenHeight, scale);
     this.gameOverModal.resize(screenWidth, screenHeight, scale);
   }
 
@@ -66,7 +75,8 @@ export class HUD {
       this.gameOverModal.containsPoint(screenX, screenY) ||
       this.evolutionPanel.containsPoint(screenX, screenY) ||
       this.statPanel.containsPoint(screenX, screenY) ||
-      this.miniMap.containsPoint(screenX, screenY)
+      this.miniMap.containsPoint(screenX, screenY) ||
+      this.freeCamBanner.containsPoint(screenX, screenY)
     );
   }
 
@@ -79,10 +89,13 @@ export class HUD {
   }
 
   /**
-   * 處理滑鼠按下事件 (若點擊在轉職卡牌或屬性面板的 + 上，觸發對應行為)
+   * 處理滑鼠按下事件 (若點擊在轉職卡牌、屬性面板或自由相機橫幅上，觸發對應行為)
    */
   public handlePointerDown(screenX: number, screenY: number): boolean {
     if (!this.visible) return false;
+    if (this.freeCamBanner.handlePointerDown(screenX, screenY)) {
+      return true;
+    }
     if (this.evolutionPanel.handlePointerDown(screenX, screenY)) {
       return true;
     }
@@ -90,7 +103,7 @@ export class HUD {
   }
 
   /**
-   * 每個渲染幀更新所有 HUD 元件 (包含排行榜)
+   * 每個渲染幀更新所有 HUD 元件 (包含排行榜與自由相機橫幅)
    */
   public update(
     playerTank: Tank,
@@ -110,6 +123,7 @@ export class HUD {
       this.evolutionPanel.update(dtSeconds);
     }
     this.killToast.update(dtSeconds);
+    this.freeCamBanner.update(camera);
     this.gameOverModal.update(dtSeconds);
     this.scoreBar.update(playerTank, dtSeconds);
     this.miniMap.update(playerTank, alpha, camera, allTanks);

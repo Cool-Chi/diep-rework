@@ -10,11 +10,12 @@ import type { EventBus } from './EventBus';
 export class InputManager {
   public eventBus: EventBus | null = null;
 
-  private keyW = false;
-  private keyA = false;
-  private keyS = false;
-  private keyD = false;
-  private keySpace = false;
+  public keyW = false;
+  public keyA = false;
+  public keyS = false;
+  public keyD = false;
+  public keySpace = false;
+  public keyShift = false;
   public autoFire = false;
 
   public mouseScreenX = 0;
@@ -23,8 +24,9 @@ export class InputManager {
   public onPointerMove: ((screenX: number, screenY: number) => void) | null =
     null;
 
-  // 自由相機回呼與拖拽狀態
+  // 自由相機回呼、狀態與拖拽
   public onToggleFreeCam: (() => void) | null = null;
+  public isFreeCamActive: (() => boolean) | null = null;
   public onCameraPan: ((screenDx: number, screenDy: number) => void) | null =
     null;
   public onCameraZoom: ((deltaFactor: number) => void) | null = null;
@@ -204,6 +206,10 @@ export class InputManager {
       case 'KeyC':
         if (!e.repeat) this.onToggleFreeCam?.();
         break;
+      case 'ShiftLeft':
+      case 'ShiftRight':
+        this.keyShift = true;
+        break;
       case 'Digit1':
         if (!e.repeat) this.eventBus?.emitStatUpgradeRequested(0);
         break;
@@ -255,6 +261,10 @@ export class InputManager {
       case 'Space':
         this.keySpace = false;
         break;
+      case 'ShiftLeft':
+      case 'ShiftRight':
+        this.keyShift = false;
+        break;
     }
   }
 
@@ -270,6 +280,7 @@ export class InputManager {
     this.keyS = false;
     this.keyD = false;
     this.keySpace = false;
+    this.keyShift = false;
     this.isMouseDown = false;
     this.isPanning = false;
   }
@@ -293,6 +304,13 @@ export class InputManager {
       if (this.isOverUi?.(e.clientX, e.clientY)) {
         return;
       }
+      if (this.isFreeCamActive?.()) {
+        // 在自由相機模式下，滑鼠左鍵拖曳亦為平移視角
+        this.isPanning = true;
+        this.lastPanX = e.clientX;
+        this.lastPanY = e.clientY;
+        return;
+      }
       this.isMouseDown = true;
     } else if (e.button === 1 || e.button === 2) {
       // 中鍵或右鍵按下：啟動相機平移
@@ -305,6 +323,9 @@ export class InputManager {
   private handlePointerUp(e: PointerEvent): void {
     if (e.button === 0) {
       this.isMouseDown = false;
+      if (this.isFreeCamActive?.()) {
+        this.isPanning = false;
+      }
     } else if (e.button === 1 || e.button === 2) {
       this.isPanning = false;
     }
@@ -326,6 +347,7 @@ export class InputManager {
     if (this.keyS) keys.push('KeyS');
     if (this.keyD) keys.push('KeyD');
     if (this.keySpace) keys.push('Space');
+    if (this.keyShift) keys.push('Shift');
     if (this.autoFire) keys.push('AutoFire(E)');
     if (this.isMouseDown) keys.push('Mouse0');
     return keys;
@@ -340,6 +362,18 @@ export class InputManager {
     target: InputCommand,
     screenToWorld: (sx: number, sy: number) => { x: number; y: number },
   ): void {
+    const worldPos = screenToWorld(this.mouseScreenX, this.mouseScreenY);
+    target.aimX = worldPos.x;
+    target.aimY = worldPos.y;
+
+    if (this.isFreeCamActive?.()) {
+      // 自由相機模式下，玩家坦克保持原地靜止、不開火，避免玩家坦克盲目飄移撞怪或死亡
+      target.moveX = 0;
+      target.moveY = 0;
+      target.shooting = false;
+      return;
+    }
+
     let mx = 0;
     let my = 0;
     if (this.keyD) mx += 1;
@@ -350,9 +384,5 @@ export class InputManager {
     target.moveX = mx;
     target.moveY = my;
     target.shooting = this.isMouseDown || this.keySpace || this.autoFire;
-
-    const worldPos = screenToWorld(this.mouseScreenX, this.mouseScreenY);
-    target.aimX = worldPos.x;
-    target.aimY = worldPos.y;
   }
 }

@@ -77,6 +77,9 @@ export class Camera {
    * 縮放 = CAMERA_BASE_SCALE ÷ (fovMultiplier * 等級視野放大率)
    */
   public get scale(): number {
+    if (this.isFreeCam) {
+      return this.baseScale * this.freeCamZoom;
+    }
     if (this.isGodView) {
       // 上帝鳥瞰視角：將封閉地圖完整縮放至螢幕內 (留 400 單位安全邊距)
       const mapMargin = 400;
@@ -84,9 +87,6 @@ export class Camera {
         this.screenWidth / (WORLD_WIDTH + mapMargin),
         this.screenHeight / (WORLD_HEIGHT + mapMargin),
       );
-    }
-    if (this.isFreeCam) {
-      return this.baseScale * this.freeCamZoom;
     }
     const levelFactor = 1 + (this.targetLevel - 1) * this.fovLevelScaling;
     return this.baseScale / (this.fovMultiplier * levelFactor);
@@ -133,14 +133,14 @@ export class Camera {
    * 設定平滑跟隨的目標座標（請傳入插值後的坦克顯示位置）
    */
   public setTarget(x: number, y: number): void {
-    if (this.isGodView) {
-      this.targetX = WORLD_WIDTH * 0.5;
-      this.targetY = WORLD_HEIGHT * 0.5;
-      return;
-    }
     if (this.isFreeCam) {
       this.targetX = this.freeCamTargetX;
       this.targetY = this.freeCamTargetY;
+      return;
+    }
+    if (this.isGodView) {
+      this.targetX = WORLD_WIDTH * 0.5;
+      this.targetY = WORLD_HEIGHT * 0.5;
       return;
     }
     if (this.spectateTarget) {
@@ -160,12 +160,12 @@ export class Camera {
   public update(dtSeconds: number): void {
     if (dtSeconds <= 0) return;
 
-    if (this.isGodView) {
-      this.targetX = WORLD_WIDTH * 0.5;
-      this.targetY = WORLD_HEIGHT * 0.5;
-    } else if (this.isFreeCam) {
+    if (this.isFreeCam) {
       this.targetX = this.freeCamTargetX;
       this.targetY = this.freeCamTargetY;
+    } else if (this.isGodView) {
+      this.targetX = WORLD_WIDTH * 0.5;
+      this.targetY = WORLD_HEIGHT * 0.5;
     } else if (this.spectateTarget) {
       this.targetX = this.spectateTarget.x;
       this.targetY = this.spectateTarget.y;
