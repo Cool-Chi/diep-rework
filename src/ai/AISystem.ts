@@ -5,12 +5,15 @@ import {
   AI_INTERCEPT_LOCK_TICKS,
   AI_INTERCEPT_MAX_ANGLE,
   AI_INTERCEPT_MIN_BULLET_RADIUS,
+  AI_INTIMIDATION_POWER_DIFF_THRESHOLD,
   AI_MAX_CPA_TICKS,
   AI_RETREAT_FORCE_MULTIPLIER,
   AI_RETREAT_HP_ENTER,
   AI_RETREAT_HP_EXIT,
   AI_SHAPE_AVOID_DISTANCE,
   AI_SHAPE_AVOID_FORCE,
+  AI_SHAPE_LOOKAHEAD_TICKS,
+  AI_SHAPE_TANGENT_FORCE,
   MAP_SIZE,
 } from '../config/constants';
 import type { ObjectPool } from '../core/ObjectPool';
@@ -31,6 +34,16 @@ const PERCEPTION_RADIUS = 750; // 索敵警戒半徑（隨相機視野擴大同�
 const THREAT_ESCAPE_RADIUS = 950; // 脫離威脅安全半徑
 const SHAPE_SAFE_DISTANCE = 140; // 避免與形狀肉搏碰撞之安全緩衝
 const BORDER_BUFFER = AI_BORDER_BUFFER; // 邊界推回力場緩衝 (350)
+
+/**
+ * 計算坦克實時綜合戰鬥力 (Combat Power Index)
+ * 公式：等級 * 1.0 + (階級 - 1) * 8.0 + 生命比例 * 6.0
+ */
+export function computeCombatPower(tank: Tank): number {
+  const tier = tank.definition?.tier ?? 1;
+  const hpRatio = tank.maxHp > 0 ? tank.hp / tank.maxHp : 1;
+  return tank.level * 1.0 + (tier - 1) * 8.0 + hpRatio * 6.0;
+}
 
 /**
  * AI 決策系統 (AISystem)
@@ -173,10 +186,22 @@ export class AISystem {
         bot.aiTargetShapeId = -1;
       }
 
-      // 4. 【殘血逃跑 (Retreat) 滯後狀態機 (Hysteresis) 與定向逃逸維持】
+      // 4. 【殘血逃跑 (Retreat) 滯後狀態機 (Hysteresis)、強弱威懾避退與定向逃逸維持】
       const hpRatio = bot.hp / bot.maxHp;
       const isCornered =
         bot.aiNearEnemyCount >= 2 && persona.multiEnemyAwareness >= 0.5;
+
+      let isOutmatched = false;
+      if (enemyTarget) {
+        const selfPower = computeCombatPower(bot);
+        const enemyPower = computeCombatPower(enemyTarget);
+        const powerDiff = enemyPower - selfPower;
+        if (powerDiff > 0 && persona.intimidationSensitivity > 0) {
+          isOutmatched =
+            powerDiff * persona.intimidationSensitivity >=
+            AI_INTIMIDATION_POWER_DIFF_THRESHOLD;
+        }
+      }
 
       if (enemyTarget) {
         // 更新逃跑方向向量（遠離可視敵人）
@@ -189,15 +214,15 @@ export class AISystem {
         }
 
         if (bot.aiState === 'retreating') {
-          // 雙門檻滯後：只要威脅仍在，持續逃跑直到生命恢復至 >= 70% 且未被多人包夾
+          // 雙門檻滯後：只要威脅仍在，持續逃跑直到生命恢復至 >= 70% 且未被多人包夾且未實力懸殊
           bot.aiEscapeMaintainTicks = AI_ESCAPE_MAINTAIN_TICKS;
-          if (hpRatio >= AI_RETREAT_HP_EXIT && !isCornered) {
+          if (hpRatio >= AI_RETREAT_HP_EXIT && !isCornered && !isOutmatched) {
             bot.aiState = 'engaging';
             bot.aiEscapeMaintainTicks = 0;
           }
         } else {
-          // 進入逃跑條件：生命值 < 45% 或被多人包夾
-          if (hpRatio < AI_RETREAT_HP_ENTER || isCornered) {
+          // 進入逃跑條件：生命值 < 45% 或被多人包夾，或面對強大敵人實力懸殊觸發主動避退
+          if (hpRatio < AI_RETREAT_HP_ENTER || isCornered || isOutmatched) {
             bot.aiState = 'retreating';
             bot.aiEscapeMaintainTicks = AI_ESCAPE_MAINTAIN_TICKS;
           } else {
@@ -205,12 +230,8 @@ export class AISystem {
           }
         }
       } else {
-        // 敵人離開可視視野：若生命值未回滿且逃跑維持計時器尚未歸零，持續定向逃跑建立安全緩衝區！
-        if (
-          bot.aiState === 'retreating' &&
-          bot.aiEscapeMaintainTicks > 0 &&
-          hpRatio < AI_RETREAT_HP_EXIT
-        ) {
+        // 敵人離開可視視野：若逃跑維持計時器尚未歸零，持續定向逃跑建立安全緩衝區！
+        if (bot.aiState === 'retreating' && bot.aiEscapeMaintainTicks > 0) {
           bot.aiEscapeMaintainTicks--;
           // 若無有效逃逸向量，則朝地圖中央逃逸
           if (
@@ -623,6 +644,35 @@ export class AISystem {
       }
     }
 
+    // 6.5. 【M9: 形狀阻礙逃跑路徑之切線偏轉 (Shape-Obstacle Tangent Escape Deflection)】
+    // 當 AI 逃跑 (wRetreat > 0) 且後撤向量正朝向幾何形狀（與避障力場對立 dot < -0.2）時，
+    // 將後撤力轉化為沿障礙物切線繞行，杜絕大馬力逃跑迎頭自撞扣血！
+    const saSq = shapeAvoidX * shapeAvoidX + shapeAvoidY * shapeAvoidY;
+    if (saSq > 0.25 && wRetreat > 0.01) {
+      const saLen = Math.sqrt(saSq);
+      const sanx = shapeAvoidX / saLen;
+      const sany = shapeAvoidY / saLen;
+
+      const rSq = retreatX * retreatX + retreatY * retreatY;
+      if (rSq > 0.001) {
+        const rLen = Math.sqrt(rSq);
+        const rnx = retreatX / rLen;
+        const rny = retreatY / rLen;
+
+        const dot = rnx * sanx + rny * sany;
+        if (dot < -0.2) {
+          let tx = -sany;
+          let ty = sanx;
+          if (bot.aiStrafeDirection < 0) {
+            tx = -tx;
+            ty = -ty;
+          }
+          retreatX = tx * rLen;
+          retreatY = ty * rLen;
+        }
+      }
+    }
+
     // 7. 合成力場並套用可訓練基因組權重與正規化（融入幾何形狀避障排斥力場）
     let mx =
       combatX * wCombat * genome.vectorWeights.combat +
@@ -630,14 +680,14 @@ export class AISystem {
       farmX * wFarm * genome.vectorWeights.farm +
       evadeX * genome.vectorWeights.evade +
       borderX * genome.vectorWeights.border +
-      shapeAvoidX;
+      shapeAvoidX * 1.5;
     let my =
       combatY * wCombat * genome.vectorWeights.combat +
       retreatY * wRetreat * genome.vectorWeights.retreat +
       farmY * wFarm * genome.vectorWeights.farm +
       evadeY * genome.vectorWeights.evade +
       borderY * genome.vectorWeights.border +
-      shapeAvoidY;
+      shapeAvoidY * 1.5;
 
     const magSq = mx * mx + my * my;
     if (magSq > 1.0) {
@@ -851,6 +901,12 @@ export class AISystem {
     this._shapeAvoidX = 0;
     this._shapeAvoidY = 0;
 
+    // 計算坦克當前速度與前進單位向量，供速度前瞻與切線繞行計算
+    const speed = Math.sqrt(self.vx * self.vx + self.vy * self.vy);
+    const hasSpeed = speed > 0.05;
+    const fvx = hasSpeed ? self.vx / speed : 0;
+    const fvy = hasSpeed ? self.vy / speed : 0;
+
     for (let i = 0; i < len; i++) {
       const shape = shapes[i];
       if (!shape.active) continue;
@@ -860,19 +916,49 @@ export class AISystem {
       const rawDistSq = dx * dx + dy * dy;
 
       // --- 幾何形狀主動避障排斥力場計算 ---
-      // 避免坦克在戰鬥走位、避彈或逃跑時撞擊形狀自殘
-      const avoidDist = self.radius + shape.radius + AI_SHAPE_AVOID_DISTANCE;
+      // 依據坦克速度進行動態前瞻 (Lookahead)，並在朝向障礙衝刺時注入側向切線繞行力 (Tangent Steering)
+      let lookahead = 0;
+      let dotForward = 0;
+      if (hasSpeed) {
+        const rawDist = Math.sqrt(rawDistSq);
+        if (rawDist > 0.001) {
+          dotForward = (self.vx * dx + self.vy * dy) / (speed * rawDist);
+          if (dotForward > 0.1) {
+            lookahead = dotForward * speed * AI_SHAPE_LOOKAHEAD_TICKS;
+          }
+        }
+      }
+
+      const totalAvoidDist = AI_SHAPE_AVOID_DISTANCE + lookahead;
+      const avoidDist = self.radius + shape.radius + totalAvoidDist;
       if (rawDistSq < avoidDist * avoidDist) {
         const dist = Math.sqrt(rawDistSq);
         if (dist > 0.001) {
+          const nx = dx / dist;
+          const ny = dy / dist;
           const clearance = dist - (self.radius + shape.radius);
           const ratio = Math.max(
             0,
-            (AI_SHAPE_AVOID_DISTANCE - clearance) / AI_SHAPE_AVOID_DISTANCE,
+            (totalAvoidDist - clearance) / totalAvoidDist,
           );
-          const force = ratio * ratio * AI_SHAPE_AVOID_FORCE;
-          this._shapeAvoidX -= (dx / dist) * force;
-          this._shapeAvoidY -= (dy / dist) * force;
+
+          // 1. 放射狀反向排斥力 (Radial Repulsion)
+          const radialForce = ratio * ratio * AI_SHAPE_AVOID_FORCE;
+          this._shapeAvoidX -= nx * radialForce;
+          this._shapeAvoidY -= ny * radialForce;
+
+          // 2. 側向切線繞行偏轉力 (Lateral Tangent Steering)
+          // 當坦克正朝障礙物快速靠近 (dotForward > 0.1) 時，計算切線向量繞開，杜絕迎頭相撞
+          if (hasSpeed && dotForward > 0.1) {
+            const cross = fvx * -ny + fvy * nx;
+            const sign =
+              cross !== 0 ? (cross > 0 ? 1 : -1) : self.aiStrafeDirection;
+            const tx = -ny * sign;
+            const ty = nx * sign;
+            const tangentForce = ratio * dotForward * AI_SHAPE_TANGENT_FORCE;
+            this._shapeAvoidX += tx * tangentForce;
+            this._shapeAvoidY += ty * tangentForce;
+          }
         }
       }
 
@@ -892,12 +978,12 @@ export class AISystem {
       }
     }
 
-    // 避障力場幅度上限保護 (最大 3.0)，杜絕密集形狀堆疊導致數值爆表
+    // 避障力場幅度上限保護 (最大 4.0)，杜絕密集形狀堆疊導致數值爆表
     const avoidMagSq =
       this._shapeAvoidX * this._shapeAvoidX +
       this._shapeAvoidY * this._shapeAvoidY;
-    if (avoidMagSq > 9.0) {
-      const inv = 3.0 / Math.sqrt(avoidMagSq);
+    if (avoidMagSq > 16.0) {
+      const inv = 4.0 / Math.sqrt(avoidMagSq);
       this._shapeAvoidX *= inv;
       this._shapeAvoidY *= inv;
     }

@@ -45,6 +45,8 @@ export interface AiPersona {
   thirdPartyBias: number;
   /** 多敵包夾規避意識 0~1：近距離敵人 ≥ 2 時提早轉為撤退 */
   multiEnemyAwareness: number;
+  /** 面對強大敵人的畏懼與主動避退敏感度 0~1.5（見到實力懸殊的強者即使滿血亦優先撤退保命） */
+  intimidationSensitivity: number;
   /** 非戰鬥時利用後座力開火趕路的傾向 0~1（僅限允許的職業，見 getRecoilBoostMode） */
   recoilBoostChance: number;
   /** 次優配點機率（Newbie 專用：改用隨機流派，仍受 minStatFloor 保底） */
@@ -65,6 +67,7 @@ export const AI_PERSONAS: Readonly<Record<PersonaId, AiPersona>> = {
     leadFactor: 0.5,
     thirdPartyBias: 0.1,
     multiEnemyAwareness: 0.2,
+    intimidationSensitivity: 1.2,
     recoilBoostChance: 0,
     suboptimalBuildChance: 0.3,
     neutralBuildBias: null,
@@ -76,6 +79,7 @@ export const AI_PERSONAS: Readonly<Record<PersonaId, AiPersona>> = {
     leadFactor: 0.75,
     thirdPartyBias: 0.4,
     multiEnemyAwareness: 0.3,
+    intimidationSensitivity: 0.4,
     recoilBoostChance: 0.3,
     suboptimalBuildChance: 0,
     neutralBuildBias: 'GLASS_CANNON',
@@ -87,6 +91,7 @@ export const AI_PERSONAS: Readonly<Record<PersonaId, AiPersona>> = {
     leadFactor: 0.9,
     thirdPartyBias: 0.6,
     multiEnemyAwareness: 0.7,
+    intimidationSensitivity: 1.0,
     recoilBoostChance: 0.5,
     suboptimalBuildChance: 0,
     neutralBuildBias: 'KITER',
@@ -98,6 +103,7 @@ export const AI_PERSONAS: Readonly<Record<PersonaId, AiPersona>> = {
     leadFactor: 1.0,
     thirdPartyBias: 0.9,
     multiEnemyAwareness: 0.9,
+    intimidationSensitivity: 0.1,
     recoilBoostChance: 0.9,
     suboptimalBuildChance: 0,
     neutralBuildBias: null,
@@ -115,6 +121,7 @@ export const LEGACY_PERSONA: AiPersona = {
   leadFactor: 1,
   thirdPartyBias: 0,
   multiEnemyAwareness: 0,
+  intimidationSensitivity: 0,
   recoilBoostChance: 0,
   suboptimalBuildChance: 0,
   neutralBuildBias: null,

@@ -369,11 +369,30 @@ export const AI_SHAPE_AVOID_DISTANCE = 55;
 export const AI_SHAPE_AVOID_FORCE = 2.4;
 
 /**
+ * AI 高速移動避障之速度前瞻預測 tick 數（約 0.4 秒前瞻，提前偵測前進路徑上的幾何形狀）
+ * TODO(tune)
+ */
+export const AI_SHAPE_LOOKAHEAD_TICKS = 10;
+
+/**
+ * AI 正前方幾何形狀側向切線繞行偏轉力倍率 (3.6x 將衝撞力轉化為弧形滑動繞行)
+ * TODO(tune)
+ */
+export const AI_SHAPE_TANGENT_FORCE = 3.6;
+
+/**
  * AI 脫離敵人視野後強制維持定向逃逸時間（ticks，75 ticks = 3.0 秒）
  * 建立安全逃逸緩衝區，杜絕在視野邊緣掉頭回跑
  * TODO(tune)
  */
 export const AI_ESCAPE_MAINTAIN_TICKS = 75;
+
+/**
+ * AI 評估弱肉強食實力差距之威懾逃逸門檻（綜合等級、階級與血量之戰力差）
+ * 當 (敵方戰力 - 自身戰力) * 人設威懾敏感度 >= 15 時觸發主動避退，杜絕弱小者迎面送頭
+ * TODO(tune)
+ */
+export const AI_INTIMIDATION_POWER_DIFF_THRESHOLD = 15.0;
 
 /** AI 目標慣性效用加成比率（1.25x 消除多目標切換抽搐）TODO(tune) */
 export const AI_TARGET_STICKINESS_RATIO = 1.25;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { AISystem } from '../src/ai/AISystem';
+import { AISystem, computeCombatPower } from '../src/ai/AISystem';
 import { MAP_SIZE } from '../src/config/constants';
+import { TANKS_CONFIG } from '../src/config/tanks.config';
 import { ObjectPool } from '../src/core/ObjectPool';
 import { Bullet } from '../src/entities/Bullet';
 import { Shape } from '../src/entities/Shape';
@@ -479,5 +480,121 @@ describe('Milestone 5: AISystem (Tactical Bot Decision & Combat)', () => {
     aiSystem.update([bot], shapes, allTanks, bulletPool, 77);
     expect(bot.aiEscapeMaintainTicks).toBe(0);
     expect(bot.aiState).toBe('farming');
+  });
+
+  it('correctly calculates tank combat power index', () => {
+    const basic = new Tank(1, 0, 0);
+    basic.level = 1;
+    basic.maxHp = 100;
+    basic.hp = 100;
+    // 1 * 1.0 + (1 - 1) * 8.0 + (100 / 100) * 6.0 = 7.0
+    expect(computeCombatPower(basic)).toBe(7.0);
+
+    const destroyer = new Tank(2, 0, 0);
+    destroyer.definition = TANKS_CONFIG.destroyer; // tier 3
+    destroyer.level = 30;
+    destroyer.maxHp = 200;
+    destroyer.hp = 200;
+    // 30 * 1.0 + (3 - 1) * 8.0 + (200 / 200) * 6.0 = 30 + 16 + 6 = 52.0
+    expect(computeCombatPower(destroyer)).toBe(52.0);
+  });
+
+  it('triggers intimidation retreat when weak AI encounters an outmatched apex predator despite 100% HP', () => {
+    const aiSystem = new AISystem();
+    aiSystem.ignorePlayer = false;
+
+    // Lv 1 Newbie bot with 100% HP
+    const newbieBot = new Tank(1001, 1000, 1000);
+    newbieBot.isAi = true;
+    newbieBot.active = true;
+    newbieBot.persona = 'newbie'; // intimidationSensitivity = 1.2
+    newbieBot.level = 1;
+    newbieBot.maxHp = 100;
+    newbieBot.hp = 100;
+
+    // Lv 30 Destroyer enemy approaching at (1300, 1000)
+    const strongEnemy = new Tank(2, 1300, 1000);
+    strongEnemy.active = true;
+    strongEnemy.definition = TANKS_CONFIG.destroyer;
+    strongEnemy.level = 30;
+    strongEnemy.maxHp = 200;
+    strongEnemy.hp = 200;
+
+    const shapes: Shape[] = [];
+    const allTanks = [strongEnemy, newbieBot];
+    const bulletPool = new ObjectPool<Bullet>(16, () => new Bullet());
+
+    aiSystem.update([newbieBot], shapes, allTanks, bulletPool, 1);
+
+    // Power diff = 52 - 7 = 45. 45 * 1.2 = 54 >= 15.0 (AI_INTIMIDATION_POWER_DIFF_THRESHOLD)
+    // Newbie bot MUST retreat despite full health!
+    expect(newbieBot.aiState).toBe('retreating');
+    expect(newbieBot.aiEscapeMaintainTicks).toBe(75);
+    expect(newbieBot.input.moveX).toBeLessThan(0); // Flees to the left away from (1300, 1000)
+  });
+
+  it('apex persona does not trigger intimidation retreat against moderately higher level foes', () => {
+    const aiSystem = new AISystem();
+    aiSystem.ignorePlayer = false;
+
+    // Lv 15 Apex bot
+    const apexBot = new Tank(1001, 1000, 1000);
+    apexBot.isAi = true;
+    apexBot.active = true;
+    apexBot.persona = 'apex'; // intimidationSensitivity = 0.1
+    apexBot.definition = TANKS_CONFIG.twin; // tier 2
+    apexBot.level = 15;
+    apexBot.maxHp = 100;
+    apexBot.hp = 100; // Power = 15 + 8 + 6 = 29.0
+
+    // Lv 30 Destroyer enemy (Power = 52.0, Diff = 23.0)
+    // 23.0 * 0.1 = 2.3 < 15.0
+    const strongEnemy = new Tank(2, 1300, 1000);
+    strongEnemy.active = true;
+    strongEnemy.definition = TANKS_CONFIG.destroyer;
+    strongEnemy.level = 30;
+    strongEnemy.maxHp = 200;
+    strongEnemy.hp = 200;
+
+    const shapes: Shape[] = [];
+    const allTanks = [strongEnemy, apexBot];
+    const bulletPool = new ObjectPool<Bullet>(16, () => new Bullet());
+
+    aiSystem.update([apexBot], shapes, allTanks, bulletPool, 1);
+
+    // Apex bot is not intimidated and stays in engaging combat mode!
+    expect(apexBot.aiState).toBe('engaging');
+  });
+
+  it('deflects fleeing AI laterally along tangent when shape obstacle blocks escape path', () => {
+    const aiSystem = new AISystem();
+    aiSystem.ignorePlayer = false;
+
+    // Bot at (1000, 1000) fleeing to the left because enemy is at (1300, 1000)
+    const bot = new Tank(1001, 1000, 1000);
+    bot.isAi = true;
+    bot.active = true;
+    bot.maxHp = 100;
+    bot.hp = 30; // retreating
+    bot.vx = -4.0; // Moving fast to the left
+    bot.vy = 0;
+    bot.aiStrafeDirection = 1;
+
+    const enemy = new Tank(2, 1300, 1000);
+    enemy.active = true;
+
+    // A giant pentagon obstacle is directly to the left in the escape path at (930, 1000)
+    const obstacle = new Shape();
+    obstacle.init(1, 'pentagon', 930, 1000, 0, 0, 28, 100, 20, 130);
+
+    const shapes = [obstacle];
+    const allTanks = [enemy, bot];
+    const bulletPool = new ObjectPool<Bullet>(16, () => new Bullet());
+
+    aiSystem.update([bot], shapes, allTanks, bulletPool, 1);
+
+    expect(bot.aiState).toBe('retreating');
+    // Escape vector must be deflected laterally (moveY != 0) instead of blindly ramming into the pentagon
+    expect(Math.abs(bot.input.moveY)).toBeGreaterThan(0.2);
   });
 });
