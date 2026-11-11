@@ -205,6 +205,11 @@ export class MultiTankRenderer {
         let targetInfo = '';
         if (tank.aiState === 'engaging' && tank.aiTargetId !== -1) {
           targetInfo = ` -> #${tank.aiTargetId}`;
+        } else if (tank.aiState === 'retreating') {
+          targetInfo =
+            tank.aiTargetId !== -1
+              ? ` -> #${tank.aiTargetId} (FLEE)`
+              : ' (FLEE)';
         } else if (tank.aiState === 'farming' && tank.aiTargetShapeId !== -1) {
           targetInfo = ` -> S#${tank.aiTargetShapeId}`;
         }

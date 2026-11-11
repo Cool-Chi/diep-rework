@@ -330,6 +330,32 @@ export const AI_INTERCEPT_LOCK_TICKS = 4;
 /** AI 砲管主動攔截之正前方最大夾角視錐（弧度，約 35.5 度；側翼流彈禁止轉動砲管）TODO(tune) */
 export const AI_INTERCEPT_MAX_ANGLE = 0.62;
 
+/**
+ * 敵方存在時，觸發 AI 主動轉動砲管攔截之最低子彈半徑（世界單位）
+ * 預設 18 單位（僅 Destroyer / Annihilator 等極度致命巨砲彈才允許攔截）
+ * 普通子彈（Twin/Basic/MG 等）一律靠身法側閃，砲管 100% 保持鎖定敵方坦克
+ * TODO(tune)
+ */
+export const AI_INTERCEPT_MIN_BULLET_RADIUS = 18;
+
+/**
+ * AI 進入殘血逃跑 (Retreat) 狀態之生命比例門檻 (< 45%)
+ * TODO(tune)
+ */
+export const AI_RETREAT_HP_ENTER = 0.45;
+
+/**
+ * AI 脫離殘血逃跑狀態之生命比例門檻 (>= 70%，雙門檻滯後 Hysteresis 杜絕進退抽搐)
+ * TODO(tune)
+ */
+export const AI_RETREAT_HP_EXIT = 0.7;
+
+/**
+ * AI 殘血逃跑後撤力場強度倍率 (2.2x 壓倒性遠離威脅)
+ * TODO(tune)
+ */
+export const AI_RETREAT_FORCE_MULTIPLIER = 2.2;
+
 /** AI 目標慣性效用加成比率（1.25x 消除多目標切換抽搐）TODO(tune) */
 export const AI_TARGET_STICKINESS_RATIO = 1.25;
 

@@ -333,4 +333,72 @@ describe('Milestone 5: AISystem (Tactical Bot Decision & Combat)', () => {
     expect(bot.aiState).toBe('engaging');
     expect(bot.aiTargetId).toBe(player.id);
   });
+
+  it('keeps aim locked on enemy body and avoids barrel swiveling for normal bullets', () => {
+    const aiSystem = new AISystem();
+    aiSystem.ignorePlayer = false;
+    const bot = new Tank(1001, 1000, 1000);
+    bot.isAi = true;
+    bot.active = true;
+
+    const enemy = new Tank(2, 1300, 1000); // 敵人在右方
+    enemy.active = true;
+
+    const shapes: Shape[] = [];
+    const allTanks = [enemy, bot];
+    const bulletPool = new ObjectPool<Bullet>(16, () => new Bullet());
+
+    // 生成一顆普通 Twin 子彈 (半徑 9 < 18) 正面飛來
+    const bIdx = bulletPool.acquire();
+    const b = bulletPool.items[bIdx];
+    b.active = true;
+    b.ownerId = enemy.id;
+    b.radius = 9;
+    b.damage = 7;
+    b.hp = 3;
+    b.x = 1150;
+    b.y = 1000;
+    b.vx = -12;
+    b.vy = 0;
+
+    aiSystem.update([bot], shapes, allTanks, bulletPool, 1);
+
+    // 瞄準應該直接瞄準敵方坦克身位 (1300, 1000)，絕不轉向瞄準普通子彈 (1150)
+    expect(bot.input.aimX).toBeCloseTo(1300, -1);
+    expect(bot.input.aimY).toBeCloseTo(1000, -1);
+    expect(bot.aiInterceptBulletIdx).toBe(-1); // 普通子彈不搶奪準星
+  });
+
+  it('supports retreat hysteresis: stays in retreating until HP heals back to 70%', () => {
+    const aiSystem = new AISystem();
+    aiSystem.ignorePlayer = false;
+    const bot = new Tank(1001, 1000, 1000);
+    bot.isAi = true;
+    bot.active = true;
+    bot.maxHp = 100;
+    bot.hp = 40; // 40% (< 45% AI_RETREAT_HP_ENTER)
+
+    const enemy = new Tank(2, 1250, 1000);
+    enemy.active = true;
+
+    const shapes: Shape[] = [];
+    const allTanks = [enemy, bot];
+    const bulletPool = new ObjectPool<Bullet>(16, () => new Bullet());
+
+    // 1. 生命 40% 觸發逃跑
+    aiSystem.update([bot], shapes, allTanks, bulletPool, 1);
+    expect(bot.aiState).toBe('retreating');
+    expect(bot.input.moveX).toBeLessThan(0); // 遠離敵方
+
+    // 2. 回血至 55%（高於 45% 但低於 70% 滯後門檻），必須持續保持 retreating 逃跑！
+    bot.hp = 55;
+    aiSystem.update([bot], shapes, allTanks, bulletPool, 2);
+    expect(bot.aiState).toBe('retreating');
+    expect(bot.input.moveX).toBeLessThan(0);
+
+    // 3. 回血至 75%（>= 70% AI_RETREAT_HP_EXIT），脫離逃跑回歸戰鬥
+    bot.hp = 75;
+    aiSystem.update([bot], shapes, allTanks, bulletPool, 3);
+    expect(bot.aiState).toBe('engaging');
+  });
 });

@@ -3,7 +3,11 @@ import {
   AI_BULLET_SCAN_RADIUS,
   AI_INTERCEPT_LOCK_TICKS,
   AI_INTERCEPT_MAX_ANGLE,
+  AI_INTERCEPT_MIN_BULLET_RADIUS,
   AI_MAX_CPA_TICKS,
+  AI_RETREAT_FORCE_MULTIPLIER,
+  AI_RETREAT_HP_ENTER,
+  AI_RETREAT_HP_EXIT,
   MAP_SIZE,
 } from '../config/constants';
 import type { ObjectPool } from '../core/ObjectPool';
@@ -136,25 +140,7 @@ export class AISystem {
       // 2. 【Phase 3 防呆 1: 防幽靈鎖定 (Stale Pool Index)】
       this.validateInterceptLock(bot, bulletPool);
 
-      // 3. 【Phase 3: CPA 來襲威脅預判與高威脅子彈鎖定 (M8 凍結紅線保留)】
-      let evadeX = 0;
-      let evadeY = 0;
-      const bestThreatBulletIdx = this.scanBulletThreats(
-        bot,
-        bulletPool,
-        (ex, ey) => {
-          evadeX += ex;
-          evadeY += ey;
-        },
-      );
-
-      // 若未處於鎖定中且偵測到高威脅子彈，觸發 4 ticks (AI_INTERCEPT_LOCK_TICKS) 防抖鎖定
-      if (bestThreatBulletIdx !== -1 && bot.aiInterceptTimer <= 0) {
-        bot.aiInterceptBulletIdx = bestThreatBulletIdx;
-        bot.aiInterceptTimer = AI_INTERCEPT_LOCK_TICKS;
-      }
-
-      // 4. 【Phase 4 & M9: 效用慣性目標選取、殘血勸架權重與多敵包夾統計】
+      // 3. 【Phase 4 & M9: 效用慣性目標選取、殘血勸架權重與多敵包夾統計】
       const classFov = bot.definition?.fovMultiplier ?? 1.0;
       const perceptionLimit = this.arenaBounds
         ? 1500
@@ -180,20 +166,51 @@ export class AISystem {
         bot.aiTargetShapeId = -1;
       }
 
-      // 5. 狀態標記推進（支援多敵包夾提前後撤意識）
+      // 4. 【殘血逃跑 (Retreat) 滯後狀態機 (Hysteresis)】
       const hpRatio = bot.hp / bot.maxHp;
       const isCornered =
         bot.aiNearEnemyCount >= 2 && persona.multiEnemyAwareness >= 0.5;
 
-      if ((hpRatio < 0.35 || isCornered) && enemyTarget) {
-        bot.aiState = 'retreating';
-      } else if (enemyTarget) {
-        bot.aiState = 'engaging';
+      if (enemyTarget) {
+        if (bot.aiState === 'retreating') {
+          // 雙門檻滯後：只要威脅仍在，持續逃跑直到生命恢復至 >= 70% 且未被多人包夾
+          if (hpRatio >= AI_RETREAT_HP_EXIT && !isCornered) {
+            bot.aiState = 'engaging';
+          }
+        } else {
+          // 進入逃跑條件：生命值 < 45% 或被多人包夾
+          if (hpRatio < AI_RETREAT_HP_ENTER || isCornered) {
+            bot.aiState = 'retreating';
+          } else {
+            bot.aiState = 'engaging';
+          }
+        }
       } else {
+        // 周遭無敵方坦克威脅，回歸農怪發育
         bot.aiState = 'farming';
       }
 
-      // 6. 【Phase 4 & M9: 5 股力場向量混合、基因組權重與牆角防死鎖滑動】
+      // 5. 【Phase 3: CPA 來襲威脅預判與高威脅子彈鎖定】
+      // 關鍵優化：有敵方坦克時，普通子彈 (radius < 18) 100% 透過身法側閃 (evadeX/evadeY) 避彈，絕不轉動砲口分心搶瞄！
+      let evadeX = 0;
+      let evadeY = 0;
+      const bestThreatBulletIdx = this.scanBulletThreats(
+        bot,
+        bulletPool,
+        enemyTarget !== null,
+        (ex, ey) => {
+          evadeX += ex;
+          evadeY += ey;
+        },
+      );
+
+      // 若未處於鎖定中且偵測到巨型重砲彈 (Destroyer/Annihilator)，觸發 4 ticks 防抖鎖定
+      if (bestThreatBulletIdx !== -1 && bot.aiInterceptTimer <= 0) {
+        bot.aiInterceptBulletIdx = bestThreatBulletIdx;
+        bot.aiInterceptTimer = AI_INTERCEPT_LOCK_TICKS;
+      }
+
+      // 6. 【Phase 4 & M9: 5 股力場向量混合、殘血逃逸加乘與牆角防死鎖滑動】
       this.blendSteeringVectors(
         bot,
         enemyTarget,
@@ -204,7 +221,7 @@ export class AISystem {
         persona,
       );
 
-      // 7. 【Phase 3 & M9: 瞄準與射擊決策（攔截提前量 + 提前量預判 + 後座力趕路）】
+      // 7. 【Phase 3 & M9: 瞄準與射擊決策（真身對位 + 殘血邊退邊打/後座力推進）】
       this.decideAimAndShoot(
         bot,
         enemyTarget,
@@ -284,11 +301,13 @@ export class AISystem {
   /**
    * 【Phase 3: CPA (Closest Point of Approach) 來襲威脅預判】
    * 掃描周圍 550 範圍內敵方子彈，計算相對速度、最接近時間 t_cpa 與碰撞半徑。
+   * @param hasEnemyTarget 是否當前已鎖定敵方坦克。若有敵方坦克，普通子彈 (radius < 18) 100% 靠走位閃避，不搶奪準星。
    * @returns 最高威脅子彈索引（若無高威脅則回傳 -1）
    */
   private scanBulletThreats(
     bot: Tank,
     bulletPool: ObjectPool<Bullet>,
+    hasEnemyTarget: boolean,
     onEvadeForce: (ex: number, ey: number) => void,
   ): number {
     const items = bulletPool.items;
@@ -330,7 +349,7 @@ export class AISystem {
 
       const corridorRadius = bot.radius + bullet.radius + 18;
       if (dCpaSq <= corridorRadius * corridorRadius) {
-        // 進入預測碰撞走廊！計算垂直側移避難向量
+        // 進入預測碰撞走廊！計算垂直側移避難向量 (所有子彈皆靠身法側閃)
         const bSpeed = Math.sqrt(bullet.vx * bullet.vx + bullet.vy * bullet.vy);
         if (bSpeed > 0.01) {
           let perpX = -bullet.vy / bSpeed;
@@ -347,22 +366,27 @@ export class AISystem {
         }
 
         // 【Phase 3 擬人前向視錐過濾】：檢查子彈是否位於目前砲管前向約 ±35.5 度 (0.62 rad) 內
-        // 側向/身後流彈一律純靠身法 (onEvadeForce) 走位閃避，堅決不轉動砲管去搶瞄！
+        // 關鍵改善：有敵方坦克時，嚴格僅允許攔截極度致命的巨型重砲彈 (Destroyer/Annihilator, 半徑 >= 18)
+        // 普通子彈 (Twin/Basic/MG/Flank 等) 一律純靠身法側閃，砲管 100% 保持鎖定敵方坦克身位！
         const aimAngleToBullet = Math.atan2(ry, rx);
         let angleDiff = aimAngleToBullet - bot.rotation;
         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
         while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
         if (Math.abs(angleDiff) <= AI_INTERCEPT_MAX_ANGLE && tCpa <= 20) {
-          // 【Phase 3 防呆 2: 威脅門檻評估】
-          const isHeavy = bullet.radius >= 14 || bullet.hp >= 8;
-          const isLethal =
-            bullet.damage >= bot.hp * 0.35 || bot.hp / bot.maxHp < 0.4;
-          const isSniper =
-            bullet.damage >= 10 &&
-            bullet.vx * bullet.vx + bullet.vy * bullet.vy >= 14 * 14;
+          let isInterceptable = false;
+          if (hasEnemyTarget) {
+            isInterceptable = bullet.radius >= AI_INTERCEPT_MIN_BULLET_RADIUS;
+          } else {
+            // 無敵方坦克（例如農怪巡邏中），允許防衛性攔截狙擊冷槍或重型子彈
+            const isHeavy = bullet.radius >= 14 || bullet.hp >= 12;
+            const isSniper =
+              bullet.damage >= 10 &&
+              bullet.vx * bullet.vx + bullet.vy * bullet.vy >= 14 * 14;
+            isInterceptable = isHeavy || isSniper;
+          }
 
-          if (isHeavy || isLethal || isSniper) {
+          if (isInterceptable) {
             const threatScore =
               (bullet.damage * (1 + bullet.hp / Math.max(bot.hp, 1))) /
               (1 + tCpa * 0.1);
@@ -424,8 +448,25 @@ export class AISystem {
     let retreatX = 0;
     let retreatY = 0;
     if (enemyTarget && enemyDist > 0.001) {
-      retreatX = -((enemyTarget.x - bot.x) / enemyDist) * 1.3;
-      retreatY = -((enemyTarget.y - bot.y) / enemyDist) * 1.3;
+      retreatX = -((enemyTarget.x - bot.x) / enemyDist) * 1.5;
+      retreatY = -((enemyTarget.y - bot.y) / enemyDist) * 1.5;
+    } else if (shapeTarget) {
+      const sdx = shapeTarget.x - bot.x;
+      const sdy = shapeTarget.y - bot.y;
+      const sd = Math.sqrt(sdx * sdx + sdy * sdy);
+      if (sd > 0.001) {
+        retreatX = -(sdx / sd) * 1.2;
+        retreatY = -(sdy / sd) * 1.2;
+      }
+    } else {
+      // 無明確目標時向地圖中心方向撤退尋求開闊地帶庇護
+      const cdx = MAP_SIZE * 0.5 - bot.x;
+      const cdy = MAP_SIZE * 0.5 - bot.y;
+      const cd = Math.sqrt(cdx * cdx + cdy * cdy);
+      if (cd > 0.001) {
+        retreatX = (cdx / cd) * 1.0;
+        retreatY = (cdy / cd) * 1.0;
+      }
     }
 
     // 3. 打怪靠攏向量 (Farm)
@@ -489,13 +530,16 @@ export class AISystem {
     let wRetreat = 0;
     let wFarm = 1.0;
 
-    if (enemyTarget) {
+    if (bot.aiState === 'retreating') {
+      // 殘血逃跑狀態：後撤向量壓倒性主導 (2.2x)，徹底壓制戰鬥逼近與農怪力場！
+      wRetreat = AI_RETREAT_FORCE_MULTIPLIER;
+      wCombat = 0.0;
+      wFarm = 0.0;
+    } else if (enemyTarget) {
       const classFov = bot.definition?.fovMultiplier ?? 1.0;
       const threatRadius = this.arenaBounds
         ? 1500
-        : (bot.aiState === 'retreating'
-            ? THREAT_ESCAPE_RADIUS
-            : PERCEPTION_RADIUS) * classFov;
+        : PERCEPTION_RADIUS * classFov;
       let dRatio = (threatRadius - enemyDist) / 250;
       if (dRatio < 0) dRatio = 0;
       if (dRatio > 1) dRatio = 1;
@@ -578,7 +622,7 @@ export class AISystem {
     bulletPool: ObjectPool<Bullet>,
     persona: AiPersona,
   ): void {
-    // 優先權 A: 【Phase 3 攔截提前量】高威脅子彈攔截鎖定（關鍵抵消射擊不套用隨機誤差）
+    // 優先權 A: 【Phase 3 攔截提前量】高威脅巨型重砲彈攔截鎖定（關鍵抵消射擊不套用隨機誤差）
     if (
       bot.aiInterceptTimer > 0 &&
       bot.aiInterceptBulletIdx >= 0 &&
@@ -586,25 +630,39 @@ export class AISystem {
       bulletPool.isActive(bot.aiInterceptBulletIdx)
     ) {
       const b = bulletPool.items[bot.aiInterceptBulletIdx];
-      const rx = b.x - bot.x;
-      const ry = b.y - bot.y;
-      const dist = Math.sqrt(rx * rx + ry * ry);
-      const vOwn = Math.max(bot.bulletSpeed, 12.27);
-      const vBullet = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
-      const tClash = dist / (vOwn + vBullet + 0.001);
+      // 雙重安全閥：若有敵方坦克目標在場，嚴格僅允許攔截 Destroyer/Annihilator 等巨型重砲彈 (radius >= 18)
+      if (!enemyTarget || b.radius >= AI_INTERCEPT_MIN_BULLET_RADIUS) {
+        const rx = b.x - bot.x;
+        const ry = b.y - bot.y;
+        const dist = Math.sqrt(rx * rx + ry * ry);
+        const vOwn = Math.max(bot.bulletSpeed, 12.27);
+        const vBullet = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+        const tClash = dist / (vOwn + vBullet + 0.001);
 
-      bot.input.aimX = b.x + b.vx * tClash;
-      bot.input.aimY = b.y + b.vy * tClash;
-      bot.input.shooting = true;
-      return;
+        bot.input.aimX = b.x + b.vx * tClash;
+        bot.input.aimY = b.y + b.vy * tClash;
+        bot.input.shooting = true;
+        return;
+      }
     }
 
-    // 優先權 B: 殘血撤退時的後座力火箭反衝加速
-    if (bot.aiState === 'retreating' && enemyTarget) {
-      bot.input.aimX = enemyTarget.x;
-      bot.input.aimY = enemyTarget.y;
-      bot.input.shooting = true;
-      return;
+    // 優先權 B: 殘血撤退時的推進與壓制射擊
+    if (bot.aiState === 'retreating') {
+      const recoilMode = getRecoilBoostMode(bot.definition.id);
+      if (recoilMode === 'rear') {
+        // 自帶後向推進砲管職業 (Tri-Angle / Booster / Fighter)：朝逃跑方向瞄準開火，尾部推進砲全速噴射推離戰場
+        bot.input.aimX = bot.x + bot.input.moveX * 500;
+        bot.input.aimY = bot.y + bot.input.moveY * 500;
+        bot.input.shooting = true;
+        return;
+      }
+      if (enemyTarget) {
+        // 前向常規職業：朝敵人身位開火，利用主砲後座力額外反衝逃跑，同時壓制追兵
+        bot.input.aimX = enemyTarget.x;
+        bot.input.aimY = enemyTarget.y;
+        bot.input.shooting = true;
+        return;
+      }
     }
 
     // 優先權 C: 戰鬥提前量預測瞄準 (Lead Aiming + 人設提前量折扣 + 穩定 Aim Noise)

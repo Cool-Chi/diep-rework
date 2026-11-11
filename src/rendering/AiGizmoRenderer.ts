@@ -81,6 +81,44 @@ export class AiGizmoRenderer {
         .stroke({ color, width: 2, alpha: 0.65 });
       this.graphics.circle(endX, endY, 3.5).fill({ color, alpha: 0.75 });
 
+      // 2.5 繪製殘血逃跑軌跡箭頭 (Escape Ray)
+      if (tank.aiState === 'retreating') {
+        const mvSq =
+          tank.input.moveX * tank.input.moveX +
+          tank.input.moveY * tank.input.moveY;
+        if (mvSq > 0.01) {
+          const mvLen = Math.sqrt(mvSq);
+          const mnx = tank.input.moveX / mvLen;
+          const mny = tank.input.moveY / mvLen;
+          const escLen = 130;
+          const escX = rx + mnx * escLen;
+          const escY = ry + mny * escLen;
+
+          // 亮青藍色逃跑軌跡線 (0x00f0ff)
+          this.graphics
+            .moveTo(rx, ry)
+            .lineTo(escX, escY)
+            .stroke({ color: 0x00f0ff, width: 2.2, alpha: 0.85 });
+
+          // 逃跑方向箭頭
+          const arrSz = 10;
+          this.graphics
+            .moveTo(escX, escY)
+            .lineTo(
+              escX - mnx * arrSz - mny * arrSz * 0.6,
+              escY - mny * arrSz + mnx * arrSz * 0.6,
+            )
+            .stroke({ color: 0x00f0ff, width: 2.2, alpha: 0.85 });
+          this.graphics
+            .moveTo(escX, escY)
+            .lineTo(
+              escX - mnx * arrSz + mny * arrSz * 0.6,
+              escY - mny * arrSz - mnx * arrSz * 0.6,
+            )
+            .stroke({ color: 0x00f0ff, width: 2.2, alpha: 0.85 });
+        }
+      }
+
       // 3. 繪製目標鎖定線 (Target Lock Line)
       if (tank.aiState === 'engaging' && tank.aiTargetId !== -1) {
         // 尋找敵方坦克目標
