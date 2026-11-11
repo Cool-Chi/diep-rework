@@ -1,7 +1,9 @@
 import { TOTAL_STATS } from '../config/stats.config';
 import type { TankClassId } from '../config/tanks.config';
 import { recomputeDerivedStats } from '../core/deriveStats';
+import { createRandomSeed, Mulberry32, type Rng } from '../core/rng';
 import type { Tank } from '../entities/Tank';
+import { AI_PERSONAS, LEGACY_PERSONA } from './aiPersonas.config';
 
 /**
  * 柔和且符合原版 diep.io 視覺氛圍的 FFA 敵人底盤色彩庫
@@ -16,8 +18,10 @@ export const BOT_PALETTE: readonly number[] = [
   0x42e5ad, // 湖水青/薄荷藍 (Seafoam Cyan)
 ];
 
-export function getRandomBotColor(): number {
-  const idx = Math.floor(Math.random() * BOT_PALETTE.length);
+const defaultRng: Rng = new Mulberry32(createRandomSeed());
+
+export function getRandomBotColor(rng: Rng = defaultRng): number {
+  const idx = rng.nextInt(BOT_PALETTE.length);
   return BOT_PALETTE[idx] ?? 0xf14e54;
 }
 
@@ -36,16 +40,22 @@ export const AI_BUILD_ARCHETYPES = {
   KITER: [7, 3, 5, 4, 6, 1, 0, 2],
 } as const;
 
+export type BuildArchetypeId = keyof typeof AI_BUILD_ARCHETYPES;
+
+const ARCHETYPE_IDS: readonly BuildArchetypeId[] = [
+  'GLASS_CANNON',
+  'RAMMER',
+  'BALANCED',
+  'KITER',
+];
+
+/** 保底點數補齊順序：Reload > BulletPen > BulletSpd > BulletDmg > MaxHP > MoveSpd */
+const FLOOR_FILL_ORDER: readonly number[] = [6, 4, 3, 5, 1, 7, 0, 2];
+
 /**
- * 為 AI 坦克分配可支配的技能點數
+ * 依職業查表取得主流派（職業決定配點，不隨機）
  */
-export function applyAiBuild(tank: Tank): void {
-  if (tank.statPoints <= 0) return;
-
-  // 依職業選取合理流派偏好
-  let preference: readonly number[] = AI_BUILD_ARCHETYPES.BALANCED;
-  const cid = tank.definition.id;
-
+export function getClassBuildArchetype(cid: TankClassId): BuildArchetypeId {
   if (
     cid === 'sniper' ||
     cid === 'assassin' ||
@@ -53,31 +63,68 @@ export function applyAiBuild(tank: Tank): void {
     cid === 'ranger' ||
     cid === 'predator'
   ) {
-    preference = AI_BUILD_ARCHETYPES.KITER;
-  } else if (cid === 'destroyer' || cid === 'annihilator') {
-    preference = AI_BUILD_ARCHETYPES.GLASS_CANNON;
-  } else if (
+    return 'KITER';
+  }
+  if (cid === 'destroyer' || cid === 'annihilator') {
+    return 'GLASS_CANNON';
+  }
+  if (
     cid === 'twin' ||
     cid === 'triple_shot' ||
     cid === 'machine_gun' ||
     cid === 'gunner' ||
     cid === 'triplet'
   ) {
-    preference = AI_BUILD_ARCHETYPES.GLASS_CANNON;
-  } else if (cid === 'tri_angle' || cid === 'booster') {
-    preference = AI_BUILD_ARCHETYPES.RAMMER;
-  } else if (
-    cid === 'flank_guard' ||
-    cid === 'twin_flank' ||
-    cid === 'quad_tank' ||
-    cid === 'penta_shot' ||
-    cid === 'octo_tank' ||
-    cid === 'fighter'
+    return 'GLASS_CANNON';
+  }
+  if (cid === 'tri_angle' || cid === 'booster') {
+    return 'RAMMER';
+  }
+  return 'BALANCED';
+}
+
+/**
+ * 為 AI 坦克分配可支配的技能點數
+ * - 主流派由職業查表決定；BALANCED 類職業可依人設偏好微調（Aggressor 偏玻璃大砲、Tactician 偏風箏）
+ * - Newbie 有機率改用隨機流派（次優配點），但所有人設皆受 minStatFloor 保底，杜絕廢角
+ * @param rng 注入的確定性 PRNG（訓練可重現）
+ */
+export function applyAiBuild(tank: Tank, rng: Rng = defaultRng): void {
+  if (tank.statPoints <= 0) return;
+
+  const persona = tank.persona ? AI_PERSONAS[tank.persona] : LEGACY_PERSONA;
+  let archetype = getClassBuildArchetype(tank.definition.id);
+
+  if (archetype === 'BALANCED' && persona.neutralBuildBias) {
+    archetype = persona.neutralBuildBias;
+  }
+  if (
+    persona.suboptimalBuildChance > 0 &&
+    rng.chance(persona.suboptimalBuildChance)
   ) {
-    preference = AI_BUILD_ARCHETYPES.BALANCED;
+    archetype = ARCHETYPE_IDS[rng.nextInt(ARCHETYPE_IDS.length)];
+  }
+  const preference: readonly number[] = AI_BUILD_ARCHETYPES[archetype];
+
+  // 1. 保底點數：輪流補齊，點數不足時優先保證輸出與射速
+  const floor = persona.minStatFloor;
+  let progressed = true;
+  while (tank.statPoints > 0 && progressed) {
+    progressed = false;
+    for (let i = 0; i < FLOOR_FILL_ORDER.length && tank.statPoints > 0; i++) {
+      const stat = FLOOR_FILL_ORDER[i];
+      if (
+        tank.statLevels[stat] < (floor[stat] ?? 0) &&
+        tank.statLevels[stat] < 7
+      ) {
+        tank.statLevels[stat]++;
+        tank.statPoints--;
+        progressed = true;
+      }
+    }
   }
 
-  // 依優先順序將剩餘點數分配至上限 7
+  // 2. 依流派優先順序將剩餘點數分配至上限 7
   let pIdx = 0;
   while (tank.statPoints > 0 && pIdx < TOTAL_STATS) {
     const stat = preference[pIdx];

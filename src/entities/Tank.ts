@@ -1,3 +1,4 @@
+import type { PersonaId } from '../ai/aiPersonas.config';
 import {
   BASE_BULLET_SPEED,
   BASE_TANK_RADIUS,
@@ -47,6 +48,14 @@ export class Tank {
   public aiCurrentAimAngle = 0; // AI 當前虛擬砲管朝向弧度 (用於擬人化平滑旋轉)
   public aiInterceptBulletIdx = -1; // 當前鎖定攔截之子彈索引 (Pool Index)
   public aiInterceptTimer = 0; // 攔截鎖定維持 ticks (預設 10 ticks 防抖)
+
+  // M9 人設狀態（persona === null 代表沿用 M8 行為：每 tick 決策、無瞄準誤差）
+  public persona: PersonaId | null = null;
+  public aiDecisionTimer = 0; // 距下次決策刷新剩餘 ticks（<= 0 時刷新）
+  public aiNoiseOffset = 0; // 瞄準角偏移 (rad)，僅在決策刷新/換目標時抽樣一次並保持穩定
+  public aiSkillJitter = 1; // 每次重生於人設範圍內的技巧抖動係數
+  public aiRecoilBoost = false; // 本決策週期是否啟用後座力趕路（刷新時擲骰）
+  public aiNearEnemyCount = 0; // 上次搜尋時近距離 (450) 敵方坦克數
 
   // 扁平世界座標（唯一真值，以 25 單位/格為基準）
   public x: number;
@@ -155,6 +164,10 @@ export class Tank {
     this.prevRotation = 0;
     this.aiInterceptBulletIdx = -1;
     this.aiInterceptTimer = 0;
+    this.aiDecisionTimer = 0;
+    this.aiNoiseOffset = 0;
+    this.aiRecoilBoost = false;
+    this.aiNearEnemyCount = 0;
     this.resetBarrelCooldowns();
     this.barrelRecoils.fill(0);
     this.prevBarrelRecoils.fill(0);

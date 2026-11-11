@@ -15,6 +15,7 @@ import { Particle } from '../entities/Particle';
 import type { ShapeType } from '../entities/Shape';
 import { Tank } from '../entities/Tank';
 import { PhysicsWorld } from '../physics/PhysicsWorld';
+import { AiGizmoRenderer } from '../rendering/AiGizmoRenderer';
 import { BulletRenderer } from '../rendering/BulletRenderer';
 import { GridRenderer } from '../rendering/GridRenderer';
 import {
@@ -89,6 +90,7 @@ export class Game {
   public readonly particleRenderer = new ParticleRenderer();
   public readonly tankRenderer = new TankRenderer();
   public readonly multiTankRenderer = new MultiTankRenderer();
+  public readonly aiGizmoRenderer = new AiGizmoRenderer();
   public readonly healthBarRenderer = new HealthBarRenderer();
   public readonly hud: HUD;
 
@@ -101,6 +103,7 @@ export class Game {
   public playerKills = 0;
 
   public showAiDevLabels = false; // 是否在 AI 頭頂顯示戰術狀態標籤
+  public showAiGizmos = false; // 是否可視化繪製 AI 視野與鎖定瞄準 Gizmo
   public isInitialized = false; // 是否已完成 Pixi 與 DOM 渲染層初始化
 
   private readonly tempTankRenderPos: RenderPositionOut = { x: 0, y: 0 };
@@ -125,6 +128,10 @@ export class Game {
     this.inputManager.isOverUi = (x, y) => this.hud.isOverUi(x, y);
     this.inputManager.onPointerMove = (x, y) =>
       this.hud.handlePointerMove(x, y);
+    this.inputManager.onToggleFreeCam = () => this.toggleFreeCam();
+    this.inputManager.onCameraPan = (dx, dy) => this.camera.panFreeCam(dx, dy);
+    this.inputManager.onCameraZoom = (factor) =>
+      this.camera.zoomFreeCam(factor);
 
     this.eventBus.onStatUpgradeRequested((statIndex) => {
       this.levelingSystem.spendStatPoint(
@@ -254,6 +261,7 @@ export class Game {
     this.renderer.worldContainer.addChild(this.shapeRenderer.container);
     this.renderer.worldContainer.addChild(this.bulletRenderer.container);
     this.renderer.worldContainer.addChild(this.particleRenderer.container);
+    this.renderer.worldContainer.addChild(this.aiGizmoRenderer.container);
     this.renderer.worldContainer.addChild(this.multiTankRenderer.container);
     this.renderer.worldContainer.addChild(this.healthBarRenderer.container);
 
@@ -270,6 +278,15 @@ export class Game {
       'pointerdown',
       (e: PointerEvent) => {
         if (e.button === 0) {
+          const miniMapTarget = this.hud.miniMap.handleClick(
+            e.clientX,
+            e.clientY,
+          );
+          if (miniMapTarget) {
+            this.camera.isFreeCam = true;
+            this.camera.setFreeCamTarget(miniMapTarget.x, miniMapTarget.y);
+            return;
+          }
           this.hud.handlePointerDown(e.clientX, e.clientY);
         }
       },
@@ -431,6 +448,14 @@ export class Game {
         this.camera.isGodView,
         this.camera.scale,
       );
+      this.aiGizmoRenderer.update(
+        this.allTanks,
+        this.shapeSystem.shapes,
+        this.bulletPool,
+        alpha,
+        visibleBounds,
+        this.showAiGizmos,
+      );
       this.shapeRenderer.update(this.shapeSystem.shapes, alpha, visibleBounds);
       this.bulletRenderer.update(this.bulletPool, alpha, visibleBounds);
       this.particleRenderer.update(this.particlePool, alpha, visibleBounds);
@@ -467,6 +492,24 @@ export class Game {
     if (this.camera.isGodView) {
       this.showAiDevLabels = true;
     }
+  }
+
+  public toggleFreeCam(): void {
+    this.camera.isFreeCam = !this.camera.isFreeCam;
+    if (this.camera.isFreeCam) {
+      this.camera.setFreeCamTarget(this.camera.x, this.camera.y);
+    }
+  }
+
+  public toggleAiGizmos(): void {
+    this.showAiGizmos = !this.showAiGizmos;
+  }
+
+  public resetCamera(): void {
+    this.camera.isFreeCam = false;
+    this.camera.isGodView = false;
+    this.camera.freeCamZoom = 1.0;
+    this.camera.teleport(this.playerTank.x, this.playerTank.y);
   }
 
   /**

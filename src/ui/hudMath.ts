@@ -52,6 +52,29 @@ export function worldToMinimap(
 }
 
 /**
+ * 將小地圖局部座標 (0 ~ mapSize) 轉換為世界座標
+ * @param localX 小地圖內部 X 座標 (0 ~ mapSize)
+ * @param localY 小地圖內部 Y 座標 (0 ~ mapSize)
+ * @param mapSize 小地圖尺寸 (像素)
+ * @param worldWidth 世界總寬度 (預設 WORLD_WIDTH)
+ * @param worldHeight 世界總高度 (預設 WORLD_HEIGHT)
+ */
+export function minimapToWorld(
+  localX: number,
+  localY: number,
+  mapSize: number,
+  worldWidth = WORLD_WIDTH,
+  worldHeight = WORLD_HEIGHT,
+): { x: number; y: number } {
+  const normX = Math.max(0, Math.min(1, localX / mapSize));
+  const normY = Math.max(0, Math.min(1, localY / mapSize));
+  return {
+    x: normX * worldWidth,
+    y: normY * worldHeight,
+  };
+}
+
+/**
  * 判斷實體是否滿足血條顯示條件
  * 規則：僅在生命受到傷害後 (hp < maxHp) 且生命值大於 0 時顯示
  * @param hp 當前生命

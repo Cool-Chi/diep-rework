@@ -4,13 +4,20 @@ import {
   AI_INTERCEPT_LOCK_TICKS,
   AI_INTERCEPT_MAX_ANGLE,
   AI_MAX_CPA_TICKS,
-  AI_TARGET_STICKINESS_RATIO,
   MAP_SIZE,
 } from '../config/constants';
 import type { ObjectPool } from '../core/ObjectPool';
+import { createRandomSeed, Mulberry32, type Rng } from '../core/rng';
 import type { Bullet } from '../entities/Bullet';
 import type { Shape } from '../entities/Shape';
 import type { Tank } from '../entities/Tank';
+import { type AiGenome, DEFAULT_GENOME, getGenomeBranch } from './aiGenome';
+import {
+  AI_PERSONAS,
+  type AiPersona,
+  getRecoilBoostMode,
+  LEGACY_PERSONA,
+} from './aiPersonas.config';
 import { getOptimalCombatDistance } from './aiTactics';
 
 const PERCEPTION_RADIUS = 750; // 索敵警戒半徑（隨相機視野擴大同步提升）
@@ -20,7 +27,8 @@ const BORDER_BUFFER = AI_BORDER_BUFFER; // 邊界推回力場緩衝 (350)
 
 /**
  * AI 決策系統 (AISystem)
- * 整合 M8 Phase 3 (CPA 來襲彈幕預判、擬人前向視錐主動攔截) 與 Phase 4 (5 股連續向量加權混合、牆角防死鎖滑動與 1.25x 效用慣性)。
+ * 整合 M8 (CPA 預判、前向視錐攔截、5 股連續向量混合、防牆角死鎖切線滑動)
+ * 與 M9 (4 種強弱人設、可注入種子 PRNG、可訓練戰術基因組、防抖 Aim Noise、合理後座力趕路)。
  * 100% 透過寫入實體的 InputCommand (moveX, moveY, aimX, aimY, shooting) 驅動，
  * 嚴格遵循熱路徑零配置 (Zero-Allocation)，不 new 任何臨時物件與閉包。
  */
@@ -35,6 +43,19 @@ export class AISystem {
     minY: number;
     maxY: number;
   } | null = null;
+
+  /** 可訓練戰術基因組（預設 100% 還原 M8 行為） */
+  public genome: AiGenome = DEFAULT_GENOME;
+
+  /** 確定性隨機數產生器（注入用，訓練 100% 可重現） */
+  public rng: Rng;
+
+  constructor(rng?: Rng, genome?: AiGenome) {
+    this.rng = rng ?? new Mulberry32(createRandomSeed());
+    if (genome) {
+      this.genome = genome;
+    }
+  }
 
   /**
    * 每個模擬 tick (25 TPS) 更新所有活動 AI 坦克的輸入指令
@@ -80,6 +101,33 @@ export class AISystem {
 
       bot.aiStateTimer++;
 
+      // 取得坦克對應人設配置 (若未設置 persona 則沿用 M8 基準)
+      const persona: AiPersona = bot.persona
+        ? AI_PERSONAS[bot.persona]
+        : LEGACY_PERSONA;
+
+      // --- M9 決策間隔節流與防抖 Aim Noise 取樣 ---
+      // 重要防抖但書：Aim Noise 嚴禁每 tick 重抽！僅在 reactionIntervalTicks 週期到期時抽樣一次並保持穩定
+      const isDecisionTick = bot.aiDecisionTimer <= 0;
+      if (isDecisionTick) {
+        bot.aiDecisionTimer = Math.max(1, persona.reactionIntervalTicks);
+        if (persona.aimNoiseRad > 0) {
+          bot.aiNoiseOffset =
+            this.rng.gaussian() * persona.aimNoiseRad * bot.aiSkillJitter;
+        } else {
+          bot.aiNoiseOffset = 0;
+        }
+
+        // 刷新非戰鬥時後座力趕路意圖
+        if (persona.recoilBoostChance > 0) {
+          bot.aiRecoilBoost = this.rng.chance(persona.recoilBoostChance);
+        } else {
+          bot.aiRecoilBoost = false;
+        }
+      } else {
+        bot.aiDecisionTimer--;
+      }
+
       // 1. 每隔約 75 ticks (3秒) 隨機反轉走位橫移方向
       if ((currentTick + bot.id * 17) % 75 === 0) {
         bot.aiStrafeDirection = bot.aiStrafeDirection === 1 ? -1 : 1;
@@ -88,7 +136,7 @@ export class AISystem {
       // 2. 【Phase 3 防呆 1: 防幽靈鎖定 (Stale Pool Index)】
       this.validateInterceptLock(bot, bulletPool);
 
-      // 3. 【Phase 3: CPA 來襲威脅預判與高威脅子彈鎖定】
+      // 3. 【Phase 3: CPA 來襲威脅預判與高威脅子彈鎖定 (M8 凍結紅線保留)】
       let evadeX = 0;
       let evadeY = 0;
       const bestThreatBulletIdx = this.scanBulletThreats(
@@ -100,13 +148,13 @@ export class AISystem {
         },
       );
 
-      // 若未處於鎖定中且偵測到高威脅子彈，觸發 10 ticks 防抖鎖定
+      // 若未處於鎖定中且偵測到高威脅子彈，觸發 4 ticks (AI_INTERCEPT_LOCK_TICKS) 防抖鎖定
       if (bestThreatBulletIdx !== -1 && bot.aiInterceptTimer <= 0) {
         bot.aiInterceptBulletIdx = bestThreatBulletIdx;
         bot.aiInterceptTimer = AI_INTERCEPT_LOCK_TICKS;
       }
 
-      // 4. 【Phase 4: 具 1.25x 慣性之目標選取，並動態繼承職業 FOV】
+      // 4. 【Phase 4 & M9: 效用慣性目標選取、殘血勸架權重與多敵包夾統計】
       const classFov = bot.definition?.fovMultiplier ?? 1.0;
       const perceptionLimit = this.arenaBounds
         ? 1500
@@ -117,6 +165,7 @@ export class AISystem {
         bot,
         allTanks,
         perceptionLimit,
+        persona,
       );
       if (enemyTarget) {
         bot.aiTargetId = enemyTarget.id;
@@ -131,9 +180,12 @@ export class AISystem {
         bot.aiTargetShapeId = -1;
       }
 
-      // 5. 狀態標記推進（維持向後相容與 telemetry）
+      // 5. 狀態標記推進（支援多敵包夾提前後撤意識）
       const hpRatio = bot.hp / bot.maxHp;
-      if (hpRatio < 0.35 && enemyTarget) {
+      const isCornered =
+        bot.aiNearEnemyCount >= 2 && persona.multiEnemyAwareness >= 0.5;
+
+      if ((hpRatio < 0.35 || isCornered) && enemyTarget) {
         bot.aiState = 'retreating';
       } else if (enemyTarget) {
         bot.aiState = 'engaging';
@@ -141,7 +193,7 @@ export class AISystem {
         bot.aiState = 'farming';
       }
 
-      // 6. 【Phase 4: 5 股連續向量力場混合與牆角防死鎖滑動】
+      // 6. 【Phase 4 & M9: 5 股力場向量混合、基因組權重與牆角防死鎖滑動】
       this.blendSteeringVectors(
         bot,
         enemyTarget,
@@ -149,10 +201,17 @@ export class AISystem {
         evadeX,
         evadeY,
         hpRatio,
+        persona,
       );
 
-      // 7. 【Phase 3 & Phase 4: 瞄準與射擊決策（攔截提前量 + 反衝加速 + 提前量預判）】
-      this.decideAimAndShoot(bot, enemyTarget, shapeTarget, bulletPool);
+      // 7. 【Phase 3 & M9: 瞄準與射擊決策（攔截提前量 + 提前量預判 + 後座力趕路）】
+      this.decideAimAndShoot(
+        bot,
+        enemyTarget,
+        shapeTarget,
+        bulletPool,
+        persona,
+      );
     }
   }
 
@@ -224,7 +283,7 @@ export class AISystem {
 
   /**
    * 【Phase 3: CPA (Closest Point of Approach) 來襲威脅預判】
-   * 掃描周圍 400 範圍內敵方子彈，計算相對速度、最接近時間 t_cpa 與碰撞半徑。
+   * 掃描周圍 550 範圍內敵方子彈，計算相對速度、最接近時間 t_cpa 與碰撞半徑。
    * @returns 最高威脅子彈索引（若無高威脅則回傳 -1）
    */
   private scanBulletThreats(
@@ -287,7 +346,7 @@ export class AISystem {
           onEvadeForce(perpX * urgency * 1.5, perpY * urgency * 1.5);
         }
 
-        // 【Phase 3 擬人前向視錐過濾】：檢查子彈是否位於目前砲管前向約 ±35.5 度內
+        // 【Phase 3 擬人前向視錐過濾】：檢查子彈是否位於目前砲管前向約 ±35.5 度 (0.62 rad) 內
         // 側向/身後流彈一律純靠身法 (onEvadeForce) 走位閃避，堅決不轉動砲管去搶瞄！
         const aimAngleToBullet = Math.atan2(ry, rx);
         let angleDiff = aimAngleToBullet - bot.rotation;
@@ -320,7 +379,7 @@ export class AISystem {
   }
 
   /**
-   * 【Phase 4: 5 股連續力場向量加權混合與防死鎖滑動】
+   * 【Phase 4 & M9: 5 股連續力場向量加權混合與防死鎖滑動】
    */
   private blendSteeringVectors(
     bot: Tank,
@@ -329,8 +388,11 @@ export class AISystem {
     evadeX: number,
     evadeY: number,
     hpRatio: number,
+    persona: AiPersona,
   ): void {
-    // 1. 戰鬥交火向量 (Combat)
+    const genome = this.genome;
+
+    // 1. 戰鬥交火向量 (Combat)，支援各分支理想距離比
     let combatX = 0;
     let combatY = 0;
     let enemyDist = 9999;
@@ -341,7 +403,11 @@ export class AISystem {
       if (enemyDist > 0.001) {
         const enx = edx / enemyDist;
         const eny = edy / enemyDist;
-        const optDist = getOptimalCombatDistance(bot.definition.id);
+        const branch = getGenomeBranch(bot.definition.id);
+        const distRatio = branch
+          ? (genome.engageDistanceRatio[branch] ?? 1.0)
+          : 1.0;
+        const optDist = getOptimalCombatDistance(bot.definition.id) * distRatio;
         const perpX = -eny * bot.aiStrafeDirection;
         const perpY = enx * bot.aiStrafeDirection;
 
@@ -407,10 +473,17 @@ export class AISystem {
     borderX *= 1.6;
     borderY *= 1.6;
 
-    // 5. 計算連續過渡權重 (Continuous Crisis Weight)
-    let wCrisis = (0.55 - hpRatio) / 0.35;
+    // 5. 計算連續過渡權重 (Continuous Crisis Weight，依基因組曲線與多敵意識)
+    const hpStart = genome.retreatCurve.hpStart;
+    const slope = genome.retreatCurve.slope;
+    let wCrisis = (hpStart - hpRatio) * (slope * 0.35);
     if (wCrisis < 0) wCrisis = 0;
     if (wCrisis > 1) wCrisis = 1;
+
+    // 多敵包夾規避意識加乘
+    if (bot.aiNearEnemyCount >= 2 && persona.multiEnemyAwareness > 0) {
+      wCrisis = Math.min(1.0, wCrisis + persona.multiEnemyAwareness * 0.35);
+    }
 
     let wCombat = 0;
     let wRetreat = 0;
@@ -432,7 +505,7 @@ export class AISystem {
       wFarm = (1.0 - wCombat) * (1.0 - wRetreat);
     }
 
-    // 6. 【Phase 4 防呆 3: 防牆角力場抵消死鎖 (Wall-Corner Tangent Sliding)】
+    // 6. 【Phase 4 防呆 3: 防牆角力場抵消死鎖 (Wall-Corner Tangent Sliding - M8 凍結紅線)】
     const bSq = borderX * borderX + borderY * borderY;
     if (bSq > 0.0025 && wRetreat > 0.01) {
       const bLen = Math.sqrt(bSq);
@@ -461,19 +534,19 @@ export class AISystem {
       }
     }
 
-    // 7. 合成力場並正規化
+    // 7. 合成力場並套用可訓練基因組權重與正規化
     let mx =
-      combatX * wCombat +
-      retreatX * wRetreat +
-      farmX * wFarm +
-      evadeX +
-      borderX;
+      combatX * wCombat * genome.vectorWeights.combat +
+      retreatX * wRetreat * genome.vectorWeights.retreat +
+      farmX * wFarm * genome.vectorWeights.farm +
+      evadeX * genome.vectorWeights.evade +
+      borderX * genome.vectorWeights.border;
     let my =
-      combatY * wCombat +
-      retreatY * wRetreat +
-      farmY * wFarm +
-      evadeY +
-      borderY;
+      combatY * wCombat * genome.vectorWeights.combat +
+      retreatY * wRetreat * genome.vectorWeights.retreat +
+      farmY * wFarm * genome.vectorWeights.farm +
+      evadeY * genome.vectorWeights.evade +
+      borderY * genome.vectorWeights.border;
 
     const magSq = mx * mx + my * my;
     if (magSq > 1.0) {
@@ -496,15 +569,16 @@ export class AISystem {
   }
 
   /**
-   * 【Phase 3 & Phase 4: 瞄準與射擊決策】
+   * 【Phase 3 & M9: 瞄準與射擊決策】
    */
   private decideAimAndShoot(
     bot: Tank,
     enemyTarget: Tank | null,
     shapeTarget: Shape | null,
     bulletPool: ObjectPool<Bullet>,
+    persona: AiPersona,
   ): void {
-    // 優先權 A: 【Phase 3 攔截提前量】高威脅子彈攔截鎖定
+    // 優先權 A: 【Phase 3 攔截提前量】高威脅子彈攔截鎖定（關鍵抵消射擊不套用隨機誤差）
     if (
       bot.aiInterceptTimer > 0 &&
       bot.aiInterceptBulletIdx >= 0 &&
@@ -533,16 +607,27 @@ export class AISystem {
       return;
     }
 
-    // 優先權 C: 戰鬥提前量預測瞄準 (Lead Aiming)
+    // 優先權 C: 戰鬥提前量預測瞄準 (Lead Aiming + 人設提前量折扣 + 穩定 Aim Noise)
     if (enemyTarget) {
       const edx = enemyTarget.x - bot.x;
       const edy = enemyTarget.y - bot.y;
       const dist = Math.sqrt(edx * edx + edy * edy);
       const bSpeed = Math.max(bot.bulletSpeed, 10);
-      const tHit = dist / bSpeed;
+      const tHit = (dist / bSpeed) * persona.leadFactor;
 
-      bot.input.aimX = enemyTarget.x + enemyTarget.vx * tHit;
-      bot.input.aimY = enemyTarget.y + enemyTarget.vy * tHit;
+      const predX = enemyTarget.x + enemyTarget.vx * tHit;
+      const predY = enemyTarget.y + enemyTarget.vy * tHit;
+
+      if (Math.abs(bot.aiNoiseOffset) > 0.0001) {
+        // 加上已穩定抽樣的瞄準偏移（維持幀間角速度平滑限制，杜絕高頻微顫）
+        const baseAngle = Math.atan2(predY - bot.y, predX - bot.x);
+        const noisyAngle = baseAngle + bot.aiNoiseOffset;
+        bot.input.aimX = bot.x + Math.cos(noisyAngle) * dist;
+        bot.input.aimY = bot.y + Math.sin(noisyAngle) * dist;
+      } else {
+        bot.input.aimX = predX;
+        bot.input.aimY = predY;
+      }
       bot.input.shooting = true;
       return;
     }
@@ -555,24 +640,48 @@ export class AISystem {
       return;
     }
 
-    // 優先權 E: 平時巡航
+    // 優先權 E: 平時巡航或非戰鬥後座力趕路 (Recoil Boosting)
+    const isMoving =
+      bot.input.moveX * bot.input.moveX + bot.input.moveY * bot.input.moveY >
+      0.01;
+    if (isMoving && bot.aiRecoilBoost) {
+      const mode = getRecoilBoostMode(bot.definition.id);
+      if (mode === 'rear') {
+        // 自帶背向砲管 (Tri-Angle / Booster / Fighter)，朝前進方向瞄準射擊，後砲直接推進
+        bot.input.aimX = bot.x + bot.input.moveX * 100;
+        bot.input.aimY = bot.y + bot.input.moveY * 100;
+        bot.input.shooting = true;
+        return;
+      }
+      if (mode === 'backfire' && bot.aiNearEnemyCount === 0) {
+        // 高後座力職業且確認近身無敵方威脅時，轉向背後推進（狙擊系嚴禁）
+        bot.input.aimX = bot.x - bot.input.moveX * 100;
+        bot.input.aimY = bot.y - bot.input.moveY * 100;
+        bot.input.shooting = true;
+        return;
+      }
+    }
+
     bot.input.aimX = bot.x + bot.input.moveX * 100;
     bot.input.aimY = bot.y + bot.input.moveY * 100;
     bot.input.shooting = false;
   }
 
-  // --- 輔助查詢純函式 (熱路徑零配置，含 1.25x 目標慣性效用加成) ---
+  // --- 輔助查詢純函式 (熱路徑零配置，含目標慣性效用加成與殘血勸架權重) ---
 
   private findNearestEnemyTank(
     self: Tank,
     allTanks: Tank[],
     maxRadius: number,
+    persona: AiPersona,
   ): Tank | null {
     let bestTank: Tank | null = null;
     let minDistSq = maxRadius * maxRadius;
     const len = allTanks.length;
-    const stickinessSq =
-      AI_TARGET_STICKINESS_RATIO * AI_TARGET_STICKINESS_RATIO;
+    const stickiness = this.genome.targetSwitch.stickiness;
+    const stickinessSq = stickiness * stickiness;
+    let nearCount = 0;
+    const nearDistSq = 450 * 450;
 
     for (let i = 0; i < len; i++) {
       const other = allTanks[i];
@@ -587,12 +696,23 @@ export class AISystem {
       const dx = other.x - self.x;
       const dy = other.y - self.y;
       const rawDistSq = dx * dx + dy * dy;
+      if (rawDistSq < nearDistSq) {
+        nearCount++;
+      }
       if (rawDistSq > maxRadius * maxRadius) {
         continue;
       }
 
       let d2 = rawDistSq;
-      // 【Phase 4: 1.25x 效用慣性】：若為當前已鎖定目標，享有距離平方折扣，消除乒乓換鎖
+
+      // 殘血勸架 (Third-partying) 傾向：偏好鎖定生命比例低的目標
+      if (persona.thirdPartyBias > 0) {
+        const hpRatio = other.hp / other.maxHp;
+        // hp越低，有效評估距離平方越短（最高折減 50% * thirdPartyBias）
+        d2 *= 1.0 - (1.0 - hpRatio) * 0.5 * persona.thirdPartyBias;
+      }
+
+      // 【Phase 4: 效用慣性】：若為當前已鎖定目標，享有距離平方折扣，消除乒乓換鎖
       if (other.id === self.aiTargetId) {
         d2 /= stickinessSq;
       }
@@ -603,6 +723,7 @@ export class AISystem {
       }
     }
 
+    self.aiNearEnemyCount = nearCount;
     return bestTank;
   }
 
@@ -614,8 +735,8 @@ export class AISystem {
     let bestShape: Shape | null = null;
     let minDistSq = maxRadius * maxRadius;
     const len = shapes.length;
-    const stickinessSq =
-      AI_TARGET_STICKINESS_RATIO * AI_TARGET_STICKINESS_RATIO;
+    const stickiness = this.genome.targetSwitch.stickiness;
+    const stickinessSq = stickiness * stickiness;
 
     for (let i = 0; i < len; i++) {
       const shape = shapes[i];
@@ -629,7 +750,7 @@ export class AISystem {
       }
 
       let d2 = rawDistSq;
-      // 【Phase 4: 1.25x 效用慣性】：當前鎖定之形狀享有慣性折扣
+      // 【Phase 4: 效用慣性】：當前鎖定之形狀享有慣性折扣
       if (shape.id === self.aiTargetShapeId) {
         d2 /= stickinessSq;
       }

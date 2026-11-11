@@ -23,6 +23,15 @@ export class InputManager {
   public onPointerMove: ((screenX: number, screenY: number) => void) | null =
     null;
 
+  // 自由相機回呼與拖拽狀態
+  public onToggleFreeCam: (() => void) | null = null;
+  public onCameraPan: ((screenDx: number, screenDy: number) => void) | null =
+    null;
+  public onCameraZoom: ((deltaFactor: number) => void) | null = null;
+  private isPanning = false;
+  private lastPanX = 0;
+  private lastPanY = 0;
+
   private canvas: HTMLCanvasElement | null = null;
   private onKeyDownBound: (e: Event) => void;
   private onKeyUpBound: (e: Event) => void;
@@ -33,6 +42,7 @@ export class InputManager {
   private onPointerUpBound: (e: Event) => void;
   private onPointerCancelBound: () => void;
   private onContextMenuBound: (e: Event) => void;
+  private onWheelBound: (e: Event) => void;
 
   constructor(
     private readonly windowTarget: EventTarget = typeof window !== 'undefined'
@@ -59,8 +69,8 @@ export class InputManager {
     this.onPointerCancelBound = () => this.clearKeys();
     this.onContextMenuBound = (e) => {
       e.preventDefault();
-      this.clearKeys();
     };
+    this.onWheelBound = (e) => this.handleWheel(e as WheelEvent);
   }
 
   /**
@@ -101,6 +111,7 @@ export class InputManager {
 
     canvas.addEventListener('pointerdown', this.onPointerDownBound);
     canvas.addEventListener('contextmenu', this.onContextMenuBound);
+    canvas.addEventListener('wheel', this.onWheelBound, { passive: false });
   }
 
   /**
@@ -141,6 +152,7 @@ export class InputManager {
     if (this.canvas) {
       this.canvas.removeEventListener('pointerdown', this.onPointerDownBound);
       this.canvas.removeEventListener('contextmenu', this.onContextMenuBound);
+      this.canvas.removeEventListener('wheel', this.onWheelBound);
     }
   }
 
@@ -188,6 +200,9 @@ export class InputManager {
         break;
       case 'KeyE':
         this.autoFire = !this.autoFire;
+        break;
+      case 'KeyC':
+        if (!e.repeat) this.onToggleFreeCam?.();
         break;
       case 'Digit1':
         if (!e.repeat) this.eventBus?.emitStatUpgradeRequested(0);
@@ -256,12 +271,21 @@ export class InputManager {
     this.keyD = false;
     this.keySpace = false;
     this.isMouseDown = false;
+    this.isPanning = false;
   }
 
   private handlePointerMove(e: PointerEvent): void {
     this.mouseScreenX = e.clientX;
     this.mouseScreenY = e.clientY;
     this.onPointerMove?.(e.clientX, e.clientY);
+
+    if (this.isPanning) {
+      const dx = e.clientX - this.lastPanX;
+      const dy = e.clientY - this.lastPanY;
+      this.lastPanX = e.clientX;
+      this.lastPanY = e.clientY;
+      this.onCameraPan?.(dx, dy);
+    }
   }
 
   private handlePointerDown(e: PointerEvent): void {
@@ -270,13 +294,26 @@ export class InputManager {
         return;
       }
       this.isMouseDown = true;
+    } else if (e.button === 1 || e.button === 2) {
+      // 中鍵或右鍵按下：啟動相機平移
+      this.isPanning = true;
+      this.lastPanX = e.clientX;
+      this.lastPanY = e.clientY;
     }
   }
 
   private handlePointerUp(e: PointerEvent): void {
     if (e.button === 0) {
       this.isMouseDown = false;
+    } else if (e.button === 1 || e.button === 2) {
+      this.isPanning = false;
     }
+  }
+
+  private handleWheel(e: WheelEvent): void {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.15 : 0.85;
+    this.onCameraZoom?.(factor);
   }
 
   /**

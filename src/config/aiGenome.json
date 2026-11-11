@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "vectorWeights": {
+    "combat": 1.0,
+    "retreat": 1.0,
+    "farm": 1.0,
+    "evade": 1.0,
+    "border": 1.0
+  },
+  "engageDistanceRatio": {
+    "twin": 1.0,
+    "sniper": 1.0,
+    "machineGun": 1.0,
+    "flank": 1.0
+  },
+  "retreatCurve": {
+    "hpStart": 0.55,
+    "slope": 2.857142857142857
+  },
+  "targetSwitch": {
+    "stickiness": 1.25
+  }
+}

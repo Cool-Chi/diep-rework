@@ -1,4 +1,5 @@
-import { applyAiBuild, getRandomBotColor } from '../ai/aiTactics';
+import { PERSONA_COLORS, personaForSlot } from '../ai/aiPersonas.config';
+import { applyAiBuild } from '../ai/aiTactics';
 import { getRandomBotName } from '../ai/botNames.config';
 import { MAP_SIZE } from '../config/constants';
 import { pointsForLevel, SCORE_FOR_LEVEL } from '../config/levels.config';
@@ -8,6 +9,7 @@ import {
   type TankDefinition,
 } from '../config/tanks.config';
 import { recomputeDerivedStats } from '../core/deriveStats';
+import { createRandomSeed, Mulberry32, type Rng } from '../core/rng';
 import { Tank } from '../entities/Tank';
 
 export const TARGET_AI_COUNT = 40;
@@ -50,19 +52,24 @@ interface DeadAiRecord {
 /**
  * AI 生成與生態管理系統 (SpawnSystem)
  * 動態維持場上 40 隻 AI 坦克，依玩家等級進行梯隊生成與合理配點。
+ * 支援注入可重現的種子 PRNG，並按 40/25/25/10 金字塔分配人設 (Persona)。
  */
 export class SpawnSystem {
   public readonly aiTanks: Tank[] = [];
   private readonly deadAiQueue: DeadAiRecord[] = [];
   public isSpawningPaused = false; // 是否暫停自動生成 AI (沙盒模式使用)
+  public rng: Rng;
 
-  constructor() {
-    // 預先建立 40 隻 AI 坦克實體 (零 GC)
+  constructor(rng?: Rng) {
+    this.rng = rng ?? new Mulberry32(createRandomSeed());
+
+    // 預先建立 40 隻 AI 坦克實體 (零 GC)，槽位綁定固定人設
     for (let i = 0; i < TARGET_AI_COUNT; i++) {
       const id = AI_STARTING_ID + i + 1;
       const bot = new Tank(id, MAP_SIZE * 0.5, MAP_SIZE * 0.5);
       bot.isAi = true;
       bot.active = false;
+      bot.persona = personaForSlot(i, TARGET_AI_COUNT);
       this.aiTanks.push(bot);
     }
   }
@@ -145,7 +152,14 @@ export class SpawnSystem {
     const spawnPos = this.getRandomSpawnPosition(avoidX, avoidY, bot.id);
     bot.respawn(spawnPos.x, spawnPos.y);
 
-    // 2. 決定 AI 等級與職業梯隊
+    // 2. 重生沿用既有人設，並於人設範圍內重抽技巧抖動參數
+    if (!bot.persona) {
+      const slot = this.aiTanks.indexOf(bot);
+      bot.persona = personaForSlot(Math.max(slot, 0), TARGET_AI_COUNT);
+    }
+    bot.aiSkillJitter = this.rng.range(0.85, 1.15);
+
+    // 3. 決定 AI 等級與職業梯隊
     const targetClassId =
       forcedClass ?? this.pickClassByPlayerLevel(playerLevel);
     const def: TankDefinition =
@@ -157,19 +171,19 @@ export class SpawnSystem {
     bot.level = targetLevel;
     bot.score = SCORE_FOR_LEVEL[targetLevel - 1] ?? 0;
 
-    // 3. 賦予擬真暱稱與柔和配色
+    // 4. 賦予擬真暱稱與依人設指定專屬底盤代表色
     bot.name = getRandomBotName();
-    bot.color = getRandomBotColor();
+    bot.color = PERSONA_COLORS[bot.persona];
     bot.isAi = true;
 
-    // 4. 重置並分配流派技能點數
+    // 5. 重置並分配流派技能點數
     bot.statLevels.fill(0);
     bot.statPoints = pointsForLevel(targetLevel);
-    applyAiBuild(bot);
+    applyAiBuild(bot, this.rng);
     recomputeDerivedStats(bot);
     bot.hp = bot.maxHp;
 
-    // 5. 初始化 AI 戰術狀態
+    // 6. 初始化 AI 戰術狀態
     bot.aiState = 'farming';
     bot.aiStateTimer = 0;
     bot.aiTargetId = -1;
@@ -200,57 +214,57 @@ export class SpawnSystem {
   // --- 私有演算法與梯隊分布規則 ---
 
   private pickClassByPlayerLevel(playerLevel: number): TankClassId {
-    const r = Math.random();
+    const r = this.rng.nextFloat();
 
     if (playerLevel < 15) {
       // 玩家 Lv 1~14: 70% Tier 1, 30% Tier 2
       if (r < 0.7) {
-        return TIER1_CLASSES[Math.floor(Math.random() * TIER1_CLASSES.length)];
+        return TIER1_CLASSES[this.rng.nextInt(TIER1_CLASSES.length)];
       }
-      return TIER2_CLASSES[Math.floor(Math.random() * TIER2_CLASSES.length)];
+      return TIER2_CLASSES[this.rng.nextInt(TIER2_CLASSES.length)];
     }
 
     if (playerLevel < 30) {
       // 玩家 Lv 15~29: 30% Tier 1, 50% Tier 2, 20% Tier 3
       if (r < 0.3) {
-        return TIER1_CLASSES[Math.floor(Math.random() * TIER1_CLASSES.length)];
+        return TIER1_CLASSES[this.rng.nextInt(TIER1_CLASSES.length)];
       }
       if (r < 0.8) {
-        return TIER2_CLASSES[Math.floor(Math.random() * TIER2_CLASSES.length)];
+        return TIER2_CLASSES[this.rng.nextInt(TIER2_CLASSES.length)];
       }
-      return TIER3_CLASSES[Math.floor(Math.random() * TIER3_CLASSES.length)];
+      return TIER3_CLASSES[this.rng.nextInt(TIER3_CLASSES.length)];
     }
 
     if (playerLevel < 45) {
       // 玩家 Lv 30~44: 20% Tier 2, 60% Tier 3, 20% Tier 4
       if (r < 0.2) {
-        return TIER2_CLASSES[Math.floor(Math.random() * TIER2_CLASSES.length)];
+        return TIER2_CLASSES[this.rng.nextInt(TIER2_CLASSES.length)];
       }
       if (r < 0.8) {
-        return TIER3_CLASSES[Math.floor(Math.random() * TIER3_CLASSES.length)];
+        return TIER3_CLASSES[this.rng.nextInt(TIER3_CLASSES.length)];
       }
-      return TIER4_CLASSES[Math.floor(Math.random() * TIER4_CLASSES.length)];
+      return TIER4_CLASSES[this.rng.nextInt(TIER4_CLASSES.length)];
     }
 
     // 玩家 Lv 45 滿級: 30% Tier 3, 70% Tier 4 菁英
     if (r < 0.3) {
-      return TIER3_CLASSES[Math.floor(Math.random() * TIER3_CLASSES.length)];
+      return TIER3_CLASSES[this.rng.nextInt(TIER3_CLASSES.length)];
     }
-    return TIER4_CLASSES[Math.floor(Math.random() * TIER4_CLASSES.length)];
+    return TIER4_CLASSES[this.rng.nextInt(TIER4_CLASSES.length)];
   }
 
   private pickLevelForClass(def: TankDefinition, playerLevel: number): number {
     if (def.tier === 1) {
       const maxL = Math.min(14, Math.max(1, playerLevel));
-      return Math.floor(Math.random() * maxL) + 1;
+      return this.rng.nextInt(maxL) + 1;
     }
     if (def.tier === 2) {
       const maxL = Math.min(29, Math.max(15, playerLevel));
-      return Math.floor(Math.random() * (maxL - 15 + 1)) + 15;
+      return this.rng.nextInt(maxL - 15 + 1) + 15;
     }
     if (def.tier === 3) {
       const maxL = Math.min(44, Math.max(30, playerLevel));
-      return Math.floor(Math.random() * (maxL - 30 + 1)) + 30;
+      return this.rng.nextInt(maxL - 30 + 1) + 30;
     }
     return 45; // Tier 4 固定為 Lv 45 滿級
   }
@@ -265,14 +279,14 @@ export class SpawnSystem {
     const playerAvoidSq = 550 * 550; // 避免與玩家過近
     const botAvoidSq = 450 * 450; // 避免與既有活動 AI 扎堆重生 (防止同區域群聚)
 
-    let bestX = margin + Math.random() * (MAP_SIZE - margin * 2);
-    let bestY = margin + Math.random() * (MAP_SIZE - margin * 2);
+    let bestX = margin + this.rng.nextFloat() * (MAP_SIZE - margin * 2);
+    let bestY = margin + this.rng.nextFloat() * (MAP_SIZE - margin * 2);
     let bestMinDistSq = -1;
 
     // 全圖均勻泊松盤取樣（最多嘗試 30 次篩選安全點）
     for (let attempts = 0; attempts < 30; attempts++) {
-      const rx = margin + Math.random() * (MAP_SIZE - margin * 2);
-      const ry = margin + Math.random() * (MAP_SIZE - margin * 2);
+      const rx = margin + this.rng.nextFloat() * (MAP_SIZE - margin * 2);
+      const ry = margin + this.rng.nextFloat() * (MAP_SIZE - margin * 2);
 
       // 1. 檢查是否遠離地圖正中央五邊形巢穴
       const cdx = rx - MAP_SIZE * 0.5;

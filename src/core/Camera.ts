@@ -39,6 +39,10 @@ export class Camera {
   public baseScale: number = CAMERA_BASE_SCALE;
   public smoothK: number = CAMERA_SMOOTH_K;
   public isGodView = false; // 調試專用上帝全圖鳥瞰視角開關
+  public isFreeCam = false; // 自由相機模式開關
+  public freeCamZoom = 1.0; // 自由相機局部縮放倍率 (0.2x ~ 2.5x)
+  public freeCamTargetX = WORLD_WIDTH * 0.5;
+  public freeCamTargetY = WORLD_HEIGHT * 0.5;
 
   // 螢幕微震動系統 (Screen Shake)
   public shakeIntensity = 0;
@@ -81,6 +85,9 @@ export class Camera {
         this.screenHeight / (WORLD_HEIGHT + mapMargin),
       );
     }
+    if (this.isFreeCam) {
+      return this.baseScale * this.freeCamZoom;
+    }
     const levelFactor = 1 + (this.targetLevel - 1) * this.fovLevelScaling;
     return this.baseScale / (this.fovMultiplier * levelFactor);
   }
@@ -101,6 +108,8 @@ export class Camera {
     this.y = y;
     this.targetX = x;
     this.targetY = y;
+    this.freeCamTargetX = x;
+    this.freeCamTargetY = y;
   }
 
   public get renderX(): number {
@@ -129,6 +138,11 @@ export class Camera {
       this.targetY = WORLD_HEIGHT * 0.5;
       return;
     }
+    if (this.isFreeCam) {
+      this.targetX = this.freeCamTargetX;
+      this.targetY = this.freeCamTargetY;
+      return;
+    }
     if (this.spectateTarget) {
       this.targetX = this.spectateTarget.x;
       this.targetY = this.spectateTarget.y;
@@ -149,6 +163,9 @@ export class Camera {
     if (this.isGodView) {
       this.targetX = WORLD_WIDTH * 0.5;
       this.targetY = WORLD_HEIGHT * 0.5;
+    } else if (this.isFreeCam) {
+      this.targetX = this.freeCamTargetX;
+      this.targetY = this.freeCamTargetY;
     } else if (this.spectateTarget) {
       this.targetX = this.spectateTarget.x;
       this.targetY = this.spectateTarget.y;
@@ -175,6 +192,50 @@ export class Camera {
       this.shakeIntensity = 0;
       this.shakeOffsetX = 0;
       this.shakeOffsetY = 0;
+    }
+  }
+
+  /**
+   * 平移自由相機 (依螢幕像素位移轉換至世界位移)
+   */
+  public panFreeCam(screenDx: number, screenDy: number): void {
+    if (!this.isFreeCam) return;
+    const s = this.scale;
+    this.freeCamTargetX -= screenDx / s;
+    this.freeCamTargetY -= screenDy / s;
+    this.freeCamTargetX = Math.max(
+      0,
+      Math.min(WORLD_WIDTH, this.freeCamTargetX),
+    );
+    this.freeCamTargetY = Math.max(
+      0,
+      Math.min(WORLD_HEIGHT, this.freeCamTargetY),
+    );
+    // 同步更新 targetX/targetY 讓相機跟隨
+    this.targetX = this.freeCamTargetX;
+    this.targetY = this.freeCamTargetY;
+  }
+
+  /**
+   * 縮放自由相機 (0.2x ~ 2.5x)
+   */
+  public zoomFreeCam(deltaFactor: number): void {
+    if (!this.isFreeCam) return;
+    this.freeCamZoom = Math.max(
+      0.2,
+      Math.min(2.5, this.freeCamZoom * deltaFactor),
+    );
+  }
+
+  /**
+   * 直接設定自由相機觀察的世界座標 (例如小地圖點擊跳轉)
+   */
+  public setFreeCamTarget(worldX: number, worldY: number): void {
+    this.freeCamTargetX = Math.max(0, Math.min(WORLD_WIDTH, worldX));
+    this.freeCamTargetY = Math.max(0, Math.min(WORLD_HEIGHT, worldY));
+    if (this.isFreeCam) {
+      this.targetX = this.freeCamTargetX;
+      this.targetY = this.freeCamTargetY;
     }
   }
 

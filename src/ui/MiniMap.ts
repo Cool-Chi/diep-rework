@@ -5,7 +5,7 @@ import {
   getRenderPosition,
   type RenderPositionOut,
 } from '../rendering/getRenderPosition';
-import { worldToMinimap } from './hudMath';
+import { minimapToWorld, worldToMinimap } from './hudMath';
 import {
   MINIMAP_BG_ALPHA,
   MINIMAP_BG_COLOR,
@@ -153,5 +153,21 @@ export class MiniMap {
       screenY >= this.screenY &&
       screenY <= this.screenY + this.screenHeight
     );
+  }
+
+  /**
+   * 點擊小地圖換算對應的世界座標（供自由相機跳轉或觀察）
+   */
+  public handleClick(
+    screenX: number,
+    screenY: number,
+  ): { x: number; y: number } | null {
+    if (!this.containsPoint(screenX, screenY)) {
+      return null;
+    }
+    const scale = this.screenWidth / this.mapSize;
+    const localX = (screenX - this.screenX) / scale;
+    const localY = (screenY - this.screenY) / scale;
+    return minimapToWorld(localX, localY, this.mapSize);
   }
 }

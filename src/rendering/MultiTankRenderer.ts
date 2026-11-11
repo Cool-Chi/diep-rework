@@ -1,4 +1,5 @@
 import { Container, Text, TextStyle } from 'pixi.js';
+import { PERSONA_TAGS } from '../ai/aiPersonas.config';
 import { BASE_TANK_RADIUS, MAX_TANK_BARRELS } from '../config/constants';
 import { sizeFactor } from '../config/stats.config';
 import type { VisibleBounds } from '../core/Camera';
@@ -150,7 +151,9 @@ export class MultiTankRenderer {
           BASE_TANK_RADIUS,
           color,
         );
-        item.nameText.text = tank.name;
+        const pTag =
+          tank.isAi && tank.persona ? `[${PERSONA_TAGS[tank.persona]}] ` : '';
+        item.nameText.text = `${pTag}${tank.name}`;
       }
 
       // 4. 計算砲管世界朝向角度（AI 使用渲染幀插值後的平滑角度，玩家即時跟隨滑鼠）
@@ -199,10 +202,17 @@ export class MultiTankRenderer {
 
       // 7. 戰術狀態標籤 (FARM / COMBAT / RETREAT)
       if ((showDevLabels || isGodView) && tank.isAi) {
+        let targetInfo = '';
+        if (tank.aiState === 'engaging' && tank.aiTargetId !== -1) {
+          targetInfo = ` -> #${tank.aiTargetId}`;
+        } else if (tank.aiState === 'farming' && tank.aiTargetShapeId !== -1) {
+          targetInfo = ` -> S#${tank.aiTargetShapeId}`;
+        }
+
         if (isGodView) {
-          item.stateText.text = `[Lv${tank.level} ${tank.definition.id}] [${tank.aiState.toUpperCase()}]`;
+          item.stateText.text = `[Lv${tank.level} ${tank.definition.id}] [${tank.aiState.toUpperCase()}${targetInfo}]`;
         } else {
-          item.stateText.text = `[${tank.aiState.toUpperCase()}]`;
+          item.stateText.text = `[${tank.aiState.toUpperCase()}${targetInfo}]`;
         }
 
         let stateColor = 0x00ff88;
@@ -213,7 +223,7 @@ export class MultiTankRenderer {
         }
         item.stateText.tint = stateColor;
 
-        item.stateText.position.set(rx, textY - 10 * labelScale);
+        item.stateText.position.set(rx, textY - 15 * labelScale);
         item.stateText.visible = true;
       } else {
         item.stateText.visible = false;

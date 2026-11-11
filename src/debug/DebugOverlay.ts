@@ -220,6 +220,7 @@ export class DebugOverlay {
       </div>
       <div>Keys: <b style="color:#ffff00">${pressedStr}</b> | Dead: S:<b>${this.shapeDestroyedCount}</b> T:<b>${this.tankDiedCount}</b></div>
       <div>God: <b style="color:${this.isGodMode ? '#00ff88' : '#ff5555'}">${this.isGodMode ? 'ON' : 'OFF'}</b> | GodView: <b style="color:${this.game.camera.isGodView ? '#00ff88' : '#888888'}">${this.game.camera.isGodView ? 'ON' : 'OFF'}</b></div>
+      <div>FreeCam: <b style="color:${this.game.camera.isFreeCam ? '#00ff88' : '#888888'}">${this.game.camera.isFreeCam ? `ON (${this.game.camera.freeCamZoom.toFixed(1)}x)` : 'OFF'}</b> | Gizmos: <b style="color:${this.game.showAiGizmos ? '#00ff88' : '#888888'}">${this.game.showAiGizmos ? 'ON' : 'OFF'}</b></div>
       <div>IgnorePlayer: <b style="color:${this.game.aiSystem.ignorePlayer ? '#00ff88' : '#ff5555'}">${this.game.aiSystem.ignorePlayer ? 'ON' : 'OFF'}</b> | Sandbox: <b style="color:${this.game.agentTest.isSandboxActive ? '#00ff88' : '#888888'}">${this.game.agentTest.isSandboxActive ? `ON (${this.game.agentTest.sandboxDummyClass})` : 'OFF'}</b></div>
       <div>AI Duel: <b style="color:${this.game.agentTest.isAiDuelActive ? '#00ff88' : '#888888'}">${this.game.agentTest.isAiDuelActive ? `ON (${this.game.agentTest.duelClassAlpha} vs ${this.game.agentTest.duelClassBeta})` : 'OFF'}</b></div>
     `;
@@ -336,6 +337,66 @@ export class DebugOverlay {
       this.game.aiSystem.ignorePlayer ? '#1b4965' : '#555555',
     );
     btnContainer.appendChild(ignorePlayerBtn);
+
+    // 自由相機切換按鈕 (C 鍵快捷切換)
+    const freeCamBtn = createBtn(
+      `FreeCam: ${this.game.camera.isFreeCam ? 'ON' : 'OFF'}`,
+      () => {
+        this.game.toggleFreeCam();
+        freeCamBtn.textContent = `FreeCam: ${this.game.camera.isFreeCam ? 'ON' : 'OFF'}`;
+        freeCamBtn.style.backgroundColor = this.game.camera.isFreeCam
+          ? '#1b4965'
+          : '#555555';
+        this.renderMetrics();
+      },
+      this.game.camera.isFreeCam ? '#1b4965' : '#555555',
+    );
+    btnContainer.appendChild(freeCamBtn);
+
+    // AI 決策可視化開關按鈕
+    const gizmoBtn = createBtn(
+      `Gizmos: ${this.game.showAiGizmos ? 'ON' : 'OFF'}`,
+      () => {
+        this.game.toggleAiGizmos();
+        gizmoBtn.textContent = `Gizmos: ${this.game.showAiGizmos ? 'ON' : 'OFF'}`;
+        gizmoBtn.style.backgroundColor = this.game.showAiGizmos
+          ? '#1b4965'
+          : '#555555';
+        this.renderMetrics();
+      },
+      this.game.showAiGizmos ? '#1b4965' : '#555555',
+    );
+    btnContainer.appendChild(gizmoBtn);
+
+    // 上帝鳥瞰視角切換
+    const godViewBtn = createBtn(
+      `GodView: ${this.game.camera.isGodView ? 'ON' : 'OFF'}`,
+      () => {
+        this.game.toggleGodView();
+        godViewBtn.textContent = `GodView: ${this.game.camera.isGodView ? 'ON' : 'OFF'}`;
+        godViewBtn.style.backgroundColor = this.game.camera.isGodView
+          ? '#1b4965'
+          : '#555555';
+        this.renderMetrics();
+      },
+      this.game.camera.isGodView ? '#1b4965' : '#555555',
+    );
+    btnContainer.appendChild(godViewBtn);
+
+    // 相機重設回玩家
+    const resetCamBtn = createBtn(
+      'Reset Cam',
+      () => {
+        this.game.resetCamera();
+        freeCamBtn.textContent = 'FreeCam: OFF';
+        freeCamBtn.style.backgroundColor = '#555555';
+        godViewBtn.textContent = 'GodView: OFF';
+        godViewBtn.style.backgroundColor = '#555555';
+        this.renderMetrics();
+      },
+      '#4a5568',
+    );
+    btnContainer.appendChild(resetCamBtn);
 
     // 補滿形狀按鈕
     const fillShapeBtn = createBtn('Fill Shapes (1400)', () => {
