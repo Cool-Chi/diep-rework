@@ -1,37 +1,37 @@
 {
   "epoch": 1,
-  "timestamp": "2026-11-11T08:29:24.810Z",
+  "timestamp": "2026-11-11T08:58:22.958Z",
   "stageA": {
-    "microDuelClashes": 1370,
+    "microDuelClashes": 1369,
     "microDuelOutOfBounds": 0,
     "microDuelFocusRate": "100.0%"
   },
   "stageB": {
     "totalTicks": 2000,
-    "activeBots": 40,
+    "activeBots": 36,
     "kdRatio": {
-      "newbie": 0.88,
-      "aggressor": 0.63,
-      "tactician": 0.4,
-      "apex": 1.17
+      "newbie": 0.44,
+      "aggressor": 1.2,
+      "tactician": 0.56,
+      "apex": 0.6
     },
     "kills": {
-      "newbie": 6,
-      "aggressor": 4,
-      "tactician": 3,
-      "apex": 6
+      "newbie": 7,
+      "aggressor": 5,
+      "tactician": 4,
+      "apex": 2
     },
     "deaths": {
-      "newbie": 7,
-      "aggressor": 7,
-      "tactician": 9,
-      "apex": 5
+      "newbie": 17,
+      "aggressor": 4,
+      "tactician": 8,
+      "apex": 4
     },
     "pvpDamageRatio": "48.2%",
-    "top1Score": 5636,
-    "medianScore": 807,
-    "movementJitterRate": "0.10%",
+    "top1Score": 4992,
+    "medianScore": 857,
+    "movementJitterRate": "0.05%",
     "aimJitterRate": "0.00%",
-    "fitnessScore": 154.86
+    "fitnessScore": 141.5
   }
 }

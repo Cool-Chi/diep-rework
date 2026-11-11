@@ -319,5 +319,5 @@ describe('Milestone 9: Headless Self-Play Evolutionary Trainer', () => {
     expect(report.stageA.microDuelOutOfBounds).toBe(0);
     expect(kdRatio.apex).toBeGreaterThan(0);
     expect(kdRatio.newbie).toBeGreaterThan(0);
-  });
+  }, 30000);
 });

@@ -56,6 +56,9 @@ export class Tank {
   public aiSkillJitter = 1; // 每次重生於人設範圍內的技巧抖動係數
   public aiRecoilBoost = false; // 本決策週期是否啟用後座力趕路（刷新時擲骰）
   public aiNearEnemyCount = 0; // 上次搜尋時近距離 (450) 敵方坦克數
+  public aiEscapeVx = 0; // 定向逃逸世界單位向量 X
+  public aiEscapeVy = 0; // 定向逃逸世界單位向量 Y
+  public aiEscapeMaintainTicks = 0; // 脫離敵人視野後持續維持定向逃跑之冷卻 ticks
 
   // 扁平世界座標（唯一真值，以 25 單位/格為基準）
   public x: number;
@@ -168,6 +171,9 @@ export class Tank {
     this.aiNoiseOffset = 0;
     this.aiRecoilBoost = false;
     this.aiNearEnemyCount = 0;
+    this.aiEscapeVx = 0;
+    this.aiEscapeVy = 0;
+    this.aiEscapeMaintainTicks = 0;
     this.resetBarrelCooldowns();
     this.barrelRecoils.fill(0);
     this.prevBarrelRecoils.fill(0);

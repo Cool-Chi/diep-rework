@@ -1,6 +1,7 @@
 import {
   AI_BORDER_BUFFER,
   AI_BULLET_SCAN_RADIUS,
+  AI_ESCAPE_MAINTAIN_TICKS,
   AI_INTERCEPT_LOCK_TICKS,
   AI_INTERCEPT_MAX_ANGLE,
   AI_INTERCEPT_MIN_BULLET_RADIUS,
@@ -8,6 +9,8 @@ import {
   AI_RETREAT_FORCE_MULTIPLIER,
   AI_RETREAT_HP_ENTER,
   AI_RETREAT_HP_EXIT,
+  AI_SHAPE_AVOID_DISTANCE,
+  AI_SHAPE_AVOID_FORCE,
   MAP_SIZE,
 } from '../config/constants';
 import type { ObjectPool } from '../core/ObjectPool';
@@ -53,6 +56,10 @@ export class AISystem {
 
   /** 確定性隨機數產生器（注入用，訓練 100% 可重現） */
   public rng: Rng;
+
+  // 暫存零 GC 幾何形狀主動避障排斥力場
+  private _shapeAvoidX = 0;
+  private _shapeAvoidY = 0;
 
   constructor(rng?: Rng, genome?: AiGenome) {
     this.rng = rng ?? new Mulberry32(createRandomSeed());
@@ -166,28 +173,63 @@ export class AISystem {
         bot.aiTargetShapeId = -1;
       }
 
-      // 4. 【殘血逃跑 (Retreat) 滯後狀態機 (Hysteresis)】
+      // 4. 【殘血逃跑 (Retreat) 滯後狀態機 (Hysteresis) 與定向逃逸維持】
       const hpRatio = bot.hp / bot.maxHp;
       const isCornered =
         bot.aiNearEnemyCount >= 2 && persona.multiEnemyAwareness >= 0.5;
 
       if (enemyTarget) {
+        // 更新逃跑方向向量（遠離可視敵人）
+        const edx = enemyTarget.x - bot.x;
+        const edy = enemyTarget.y - bot.y;
+        const ed = Math.sqrt(edx * edx + edy * edy);
+        if (ed > 0.001) {
+          bot.aiEscapeVx = -edx / ed;
+          bot.aiEscapeVy = -edy / ed;
+        }
+
         if (bot.aiState === 'retreating') {
           // 雙門檻滯後：只要威脅仍在，持續逃跑直到生命恢復至 >= 70% 且未被多人包夾
+          bot.aiEscapeMaintainTicks = AI_ESCAPE_MAINTAIN_TICKS;
           if (hpRatio >= AI_RETREAT_HP_EXIT && !isCornered) {
             bot.aiState = 'engaging';
+            bot.aiEscapeMaintainTicks = 0;
           }
         } else {
           // 進入逃跑條件：生命值 < 45% 或被多人包夾
           if (hpRatio < AI_RETREAT_HP_ENTER || isCornered) {
             bot.aiState = 'retreating';
+            bot.aiEscapeMaintainTicks = AI_ESCAPE_MAINTAIN_TICKS;
           } else {
             bot.aiState = 'engaging';
           }
         }
       } else {
-        // 周遭無敵方坦克威脅，回歸農怪發育
-        bot.aiState = 'farming';
+        // 敵人離開可視視野：若生命值未回滿且逃跑維持計時器尚未歸零，持續定向逃跑建立安全緩衝區！
+        if (
+          bot.aiState === 'retreating' &&
+          bot.aiEscapeMaintainTicks > 0 &&
+          hpRatio < AI_RETREAT_HP_EXIT
+        ) {
+          bot.aiEscapeMaintainTicks--;
+          // 若無有效逃逸向量，則朝地圖中央逃逸
+          if (
+            bot.aiEscapeVx * bot.aiEscapeVx + bot.aiEscapeVy * bot.aiEscapeVy <
+            0.001
+          ) {
+            const cdx = MAP_SIZE * 0.5 - bot.x;
+            const cdy = MAP_SIZE * 0.5 - bot.y;
+            const cd = Math.sqrt(cdx * cdx + cdy * cdy);
+            if (cd > 0.001) {
+              bot.aiEscapeVx = cdx / cd;
+              bot.aiEscapeVy = cdy / cd;
+            }
+          }
+        } else {
+          // 周遭無敵方坦克威脅且脫離危險期，安全回歸農怪發育
+          bot.aiState = 'farming';
+          bot.aiEscapeMaintainTicks = 0;
+        }
       }
 
       // 5. 【Phase 3: CPA 來襲威脅預判與高威脅子彈鎖定】
@@ -210,13 +252,15 @@ export class AISystem {
         bot.aiInterceptTimer = AI_INTERCEPT_LOCK_TICKS;
       }
 
-      // 6. 【Phase 4 & M9: 5 股力場向量混合、殘血逃逸加乘與牆角防死鎖滑動】
+      // 6. 【Phase 4 & M9: 5 股力場向量混合、殘血逃逸加乘、幾何形狀避障與牆角防死鎖滑動】
       this.blendSteeringVectors(
         bot,
         enemyTarget,
         shapeTarget,
         evadeX,
         evadeY,
+        this._shapeAvoidX,
+        this._shapeAvoidY,
         hpRatio,
         persona,
       );
@@ -411,6 +455,8 @@ export class AISystem {
     shapeTarget: Shape | null,
     evadeX: number,
     evadeY: number,
+    shapeAvoidX: number,
+    shapeAvoidY: number,
     hpRatio: number,
     persona: AiPersona,
   ): void {
@@ -450,22 +496,21 @@ export class AISystem {
     if (enemyTarget && enemyDist > 0.001) {
       retreatX = -((enemyTarget.x - bot.x) / enemyDist) * 1.5;
       retreatY = -((enemyTarget.y - bot.y) / enemyDist) * 1.5;
-    } else if (shapeTarget) {
-      const sdx = shapeTarget.x - bot.x;
-      const sdy = shapeTarget.y - bot.y;
-      const sd = Math.sqrt(sdx * sdx + sdy * sdy);
-      if (sd > 0.001) {
-        retreatX = -(sdx / sd) * 1.2;
-        retreatY = -(sdy / sd) * 1.2;
-      }
+    } else if (
+      bot.aiEscapeVx * bot.aiEscapeVx + bot.aiEscapeVy * bot.aiEscapeVy >
+      0.001
+    ) {
+      // 脫離敵人視野後：持續朝向已鎖定的定向逃逸方向奔馳，建立安全緩衝區！
+      retreatX = bot.aiEscapeVx * 1.5;
+      retreatY = bot.aiEscapeVy * 1.5;
     } else {
-      // 無明確目標時向地圖中心方向撤退尋求開闊地帶庇護
+      // 無明確逃跑方向時向地圖中心方向撤退尋求開闊地帶庇護
       const cdx = MAP_SIZE * 0.5 - bot.x;
       const cdy = MAP_SIZE * 0.5 - bot.y;
       const cd = Math.sqrt(cdx * cdx + cdy * cdy);
       if (cd > 0.001) {
-        retreatX = (cdx / cd) * 1.0;
-        retreatY = (cdy / cd) * 1.0;
+        retreatX = (cdx / cd) * 1.5;
+        retreatY = (cdy / cd) * 1.5;
       }
     }
 
@@ -578,19 +623,21 @@ export class AISystem {
       }
     }
 
-    // 7. 合成力場並套用可訓練基因組權重與正規化
+    // 7. 合成力場並套用可訓練基因組權重與正規化（融入幾何形狀避障排斥力場）
     let mx =
       combatX * wCombat * genome.vectorWeights.combat +
       retreatX * wRetreat * genome.vectorWeights.retreat +
       farmX * wFarm * genome.vectorWeights.farm +
       evadeX * genome.vectorWeights.evade +
-      borderX * genome.vectorWeights.border;
+      borderX * genome.vectorWeights.border +
+      shapeAvoidX;
     let my =
       combatY * wCombat * genome.vectorWeights.combat +
       retreatY * wRetreat * genome.vectorWeights.retreat +
       farmY * wFarm * genome.vectorWeights.farm +
       evadeY * genome.vectorWeights.evade +
-      borderY * genome.vectorWeights.border;
+      borderY * genome.vectorWeights.border +
+      shapeAvoidY;
 
     const magSq = mx * mx + my * my;
     if (magSq > 1.0) {
@@ -663,6 +710,11 @@ export class AISystem {
         bot.input.shooting = true;
         return;
       }
+      // 敵人已脫離視野：面向逃跑方向安靜撤退，停止開火（防止前方後座力阻礙逃跑，加速自然回血）
+      bot.input.aimX = bot.x + bot.input.moveX * 100;
+      bot.input.aimY = bot.y + bot.input.moveY * 100;
+      bot.input.shooting = false;
+      return;
     }
 
     // 優先權 C: 戰鬥提前量預測瞄準 (Lead Aiming + 人設提前量折扣 + 穩定 Aim Noise)
@@ -796,6 +848,9 @@ export class AISystem {
     const stickiness = this.genome.targetSwitch.stickiness;
     const stickinessSq = stickiness * stickiness;
 
+    this._shapeAvoidX = 0;
+    this._shapeAvoidY = 0;
+
     for (let i = 0; i < len; i++) {
       const shape = shapes[i];
       if (!shape.active) continue;
@@ -803,6 +858,24 @@ export class AISystem {
       const dx = shape.x - self.x;
       const dy = shape.y - self.y;
       const rawDistSq = dx * dx + dy * dy;
+
+      // --- 幾何形狀主動避障排斥力場計算 ---
+      // 避免坦克在戰鬥走位、避彈或逃跑時撞擊形狀自殘
+      const avoidDist = self.radius + shape.radius + AI_SHAPE_AVOID_DISTANCE;
+      if (rawDistSq < avoidDist * avoidDist) {
+        const dist = Math.sqrt(rawDistSq);
+        if (dist > 0.001) {
+          const clearance = dist - (self.radius + shape.radius);
+          const ratio = Math.max(
+            0,
+            (AI_SHAPE_AVOID_DISTANCE - clearance) / AI_SHAPE_AVOID_DISTANCE,
+          );
+          const force = ratio * ratio * AI_SHAPE_AVOID_FORCE;
+          this._shapeAvoidX -= (dx / dist) * force;
+          this._shapeAvoidY -= (dy / dist) * force;
+        }
+      }
+
       if (rawDistSq > maxRadius * maxRadius) {
         continue;
       }
@@ -817,6 +890,16 @@ export class AISystem {
         minDistSq = d2;
         bestShape = shape;
       }
+    }
+
+    // 避障力場幅度上限保護 (最大 3.0)，杜絕密集形狀堆疊導致數值爆表
+    const avoidMagSq =
+      this._shapeAvoidX * this._shapeAvoidX +
+      this._shapeAvoidY * this._shapeAvoidY;
+    if (avoidMagSq > 9.0) {
+      const inv = 3.0 / Math.sqrt(avoidMagSq);
+      this._shapeAvoidX *= inv;
+      this._shapeAvoidY *= inv;
     }
 
     return bestShape;

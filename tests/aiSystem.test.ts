@@ -268,17 +268,22 @@ describe('Milestone 5: AISystem (Tactical Bot Decision & Combat)', () => {
     expect(bot.input.moveX).toBeLessThan(0); // 遠離敵人
 
     // 2. 敵人遠離至 2100, 1000 (距離 1100 > THREAT_ESCAPE_RADIUS 950)
+    // 依據 M9 定向逃逸防抽搐機制，AI 脫離敵人視野後持續維持定向逃跑 75 ticks (3.0秒) 建立安全緩衝區
     enemy.x = 2100;
     aiSystem.update([bot], shapes, allTanks, bulletPool, 2);
+    expect(bot.aiState).toBe('retreating');
+    expect(bot.input.moveX).toBeLessThan(0); // 持續定向遠離戰場
+
+    // 推進至第 76 tick (總共 75 ticks 逃逸期滿)
+    for (let t = 3; t <= 76; t++) {
+      aiSystem.update([bot], shapes, allTanks, bulletPool, t);
+      expect(bot.aiState).toBe('retreating');
+    }
+
+    // 第 77 tick 逃逸期滿且周遭無威脅，安全回歸 farming
+    aiSystem.update([bot], shapes, allTanks, bulletPool, 77);
     expect(bot.aiState).toBe('farming');
     expect(bot.input.shooting).toBe(true); // 立即農怪，不盲目飄移停火
-
-    // 3. 後續 50 ticks 穩定保持 farming
-    for (let t = 3; t <= 50; t++) {
-      aiSystem.update([bot], shapes, allTanks, bulletPool, t);
-      expect(bot.aiState).toBe('farming');
-      expect(bot.input.shooting).toBe(true);
-    }
   });
 
   it('dynamically retargets to immediate closer threats during combat', () => {
@@ -400,5 +405,79 @@ describe('Milestone 5: AISystem (Tactical Bot Decision & Combat)', () => {
     bot.hp = 75;
     aiSystem.update([bot], shapes, allTanks, bulletPool, 3);
     expect(bot.aiState).toBe('engaging');
+  });
+
+  it('generates obstacle repulsion force to steer clear of dangerously close shapes', () => {
+    const aiSystem = new AISystem();
+    aiSystem.ignorePlayer = false;
+    const bot = new Tank(1001, 1000, 1000);
+    bot.isAi = true;
+    bot.active = true;
+
+    // 目標農怪在右前方 (1300, 1000)
+    const targetShape = new Shape();
+    targetShape.init(1, 'square', 1300, 1000, 0, 0, 15, 10, 8, 10);
+
+    // 障礙形狀 (巨大五邊形) 正好擋在正右方近距 (1055, 1000)，淨距小於 AI_SHAPE_AVOID_DISTANCE
+    const obstacleShape = new Shape();
+    obstacleShape.init(2, 'pentagon', 1055, 1000, 0, 0, 28, 100, 20, 130);
+
+    const shapes = [targetShape, obstacleShape];
+    const allTanks = [bot];
+    const bulletPool = new ObjectPool<Bullet>(16, () => new Bullet());
+
+    aiSystem.update([bot], shapes, allTanks, bulletPool, 1);
+
+    // 避障排斥力場 (_shapeAvoidX) 必須對抗向右農怪的力場，向左推開避障
+    // 驗證 bot.input.moveX 受到強烈向左推力 (小於 0)
+    expect(bot.input.moveX).toBeLessThan(0);
+  });
+
+  it('maintains escape heading and state for 75 ticks when enemy exits perception range', () => {
+    const aiSystem = new AISystem();
+    aiSystem.ignorePlayer = false;
+    const bot = new Tank(1001, 1000, 1000);
+    bot.isAi = true;
+    bot.active = true;
+    bot.maxHp = 100;
+    bot.hp = 30; // 30% (< 45% AI_RETREAT_HP_ENTER)
+
+    const enemy = new Tank(2, 1250, 1000); // 敵人在右方
+    enemy.active = true;
+
+    const shapes: Shape[] = [];
+    let allTanks = [enemy, bot];
+    const bulletPool = new ObjectPool<Bullet>(16, () => new Bullet());
+
+    // 1. 初始更新：進入逃跑狀態，建立向左 (moveX < 0) 的定向逃逸向量
+    aiSystem.update([bot], shapes, allTanks, bulletPool, 1);
+    expect(bot.aiState).toBe('retreating');
+    expect(bot.aiEscapeVx).toBeLessThan(-0.9);
+    expect(bot.aiEscapeMaintainTicks).toBe(75);
+    expect(bot.input.moveX).toBeLessThan(0);
+
+    // 2. 敵人脫離視野（移除敵人目標）
+    allTanks = [bot];
+
+    // 3. 第 2 tick 更新：敵人已不在視野內，但 AI 必須保持 retreating 狀態，且持續往左跑
+    aiSystem.update([bot], shapes, allTanks, bulletPool, 2);
+    expect(bot.aiState).toBe('retreating');
+    expect(bot.aiEscapeMaintainTicks).toBe(74);
+    expect(bot.input.moveX).toBeLessThan(0); // 持續定向逃逸！絕不掉頭
+    expect(bot.input.shooting).toBe(false); // 安靜趕路加速回血
+
+    // 4. 連續推進至第 76 tick (維持 75 ticks)
+    for (let t = 3; t <= 76; t++) {
+      aiSystem.update([bot], shapes, allTanks, bulletPool, t);
+      expect(bot.aiState).toBe('retreating');
+      expect(bot.input.moveX).toBeLessThan(0);
+      expect(bot.input.shooting).toBe(false);
+    }
+    expect(bot.aiEscapeMaintainTicks).toBe(0);
+
+    // 5. 第 77 tick：75 ticks 逃逸期滿，安全回歸 farming
+    aiSystem.update([bot], shapes, allTanks, bulletPool, 77);
+    expect(bot.aiEscapeMaintainTicks).toBe(0);
+    expect(bot.aiState).toBe('farming');
   });
 });

@@ -356,6 +356,25 @@ export const AI_RETREAT_HP_EXIT = 0.7;
  */
 export const AI_RETREAT_FORCE_MULTIPLIER = 2.2;
 
+/**
+ * AI 幾何形狀主動避障警戒邊界淨距（世界單位，小於此距離時觸發排斥避障）
+ * TODO(tune)
+ */
+export const AI_SHAPE_AVOID_DISTANCE = 55;
+
+/**
+ * AI 幾何形狀避障排斥力場強度倍率 (2.4x 防止交火走位時撞怪自殘)
+ * TODO(tune)
+ */
+export const AI_SHAPE_AVOID_FORCE = 2.4;
+
+/**
+ * AI 脫離敵人視野後強制維持定向逃逸時間（ticks，75 ticks = 3.0 秒）
+ * 建立安全逃逸緩衝區，杜絕在視野邊緣掉頭回跑
+ * TODO(tune)
+ */
+export const AI_ESCAPE_MAINTAIN_TICKS = 75;
+
 /** AI 目標慣性效用加成比率（1.25x 消除多目標切換抽搐）TODO(tune) */
 export const AI_TARGET_STICKINESS_RATIO = 1.25;
 
