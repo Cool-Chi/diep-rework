@@ -121,7 +121,7 @@ export const LEGACY_PERSONA: AiPersona = {
   leadFactor: 1,
   thirdPartyBias: 0,
   multiEnemyAwareness: 0,
-  intimidationSensitivity: 0,
+  intimidationSensitivity: 1.0,
   recoilBoostChance: 0,
   suboptimalBuildChance: 0,
   neutralBuildBias: null,

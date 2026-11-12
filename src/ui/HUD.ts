@@ -47,7 +47,8 @@ export class HUD {
     this.container.addChild(this.miniMap.container);
     this.container.addChild(this.leaderboard.container);
     this.container.addChild(this.killToast.container);
-    this.container.addChild(this.freeCamBanner.container);
+    // 正式玩家版：完全禁用自由相機橫幅
+    this.freeCamBanner.container.visible = false;
     this.container.addChild(this.gameOverModal.container);
   }
 

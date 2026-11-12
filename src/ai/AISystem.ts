@@ -54,7 +54,7 @@ export function computeCombatPower(tank: Tank): number {
  */
 export class AISystem {
   public passiveMode = false; // 是否進入測試靜止/不開火模式
-  public ignorePlayer = true; // 是否無視玩家 (調試用，預設開啟)
+  public ignorePlayer = false; // 正式玩家版：預設開啟對玩家之敵意與索敵戰鬥
 
   /** 小型競技場邊界約束（當沙盒啟用時限定 AI 活動範圍，否則為全圖） */
   public arenaBounds: {

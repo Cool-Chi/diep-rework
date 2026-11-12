@@ -315,7 +315,7 @@ describe('Milestone 5: AISystem (Tactical Bot Decision & Combat)', () => {
 
   it('ignores player tank when ignorePlayer is true, and targets player when false', () => {
     const aiSystem = new AISystem();
-    expect(aiSystem.ignorePlayer).toBe(true); // default true
+    expect(aiSystem.ignorePlayer).toBe(false); // 正式版預設對玩家開啟敵意 (false)
 
     const bot = new Tank(1001, 1000, 1000);
     bot.isAi = true;
@@ -328,7 +328,8 @@ describe('Milestone 5: AISystem (Tactical Bot Decision & Combat)', () => {
     const allTanks = [player, bot];
     const bulletPool = new ObjectPool<Bullet>(16, () => new Bullet());
 
-    // 1. ignorePlayer = true 時，AI 忽視玩家，不進入 engaging
+    // 1. 手動設置 ignorePlayer = true 時，AI 忽視玩家，不進入 engaging
+    aiSystem.ignorePlayer = true;
     aiSystem.update([bot], shapes, allTanks, bulletPool, 1);
     expect(bot.aiState).toBe('farming');
     expect(bot.aiTargetId).toBe(-1);

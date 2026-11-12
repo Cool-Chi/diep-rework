@@ -118,7 +118,7 @@ export class Game {
 
   constructor() {
     this.playerTank.name = 'You';
-    this.playerTank.isGodMode = true; // 開局預設開啟無敵模式
+    this.playerTank.isGodMode = false; // 正式玩家版：開局預設關閉無敵模式
     this.allTanks.push(this.playerTank, ...this.spawnSystem.aiTanks);
 
     this.hud = new HUD(
@@ -130,13 +130,12 @@ export class Game {
     recomputeDerivedStats(this.playerTank);
     this.inputManager.eventBus = this.eventBus;
     this.inputManager.isOverUi = (x, y) => this.hud.isOverUi(x, y);
-    this.inputManager.isFreeCamActive = () => this.camera.isFreeCam;
+    this.inputManager.isFreeCamActive = () => false;
     this.inputManager.onPointerMove = (x, y) =>
       this.hud.handlePointerMove(x, y);
-    this.inputManager.onToggleFreeCam = () => this.toggleFreeCam();
-    this.inputManager.onCameraPan = (dx, dy) => this.camera.panFreeCam(dx, dy);
-    this.inputManager.onCameraZoom = (factor) =>
-      this.camera.zoomFreeCam(factor);
+    this.inputManager.onToggleFreeCam = null; // 正式玩家版：完全禁用自由相機切換
+    this.inputManager.onCameraPan = null;
+    this.inputManager.onCameraZoom = null;
 
     this.eventBus.onStatUpgradeRequested((statIndex) => {
       this.levelingSystem.spendStatPoint(
@@ -283,17 +282,6 @@ export class Game {
       'pointerdown',
       (e: PointerEvent) => {
         if (e.button === 0) {
-          const miniMapTarget = this.hud.miniMap.handleClick(
-            e.clientX,
-            e.clientY,
-          );
-          if (miniMapTarget) {
-            this.camera.isGodView = false;
-            this.camera.spectateTarget = null;
-            this.camera.isFreeCam = true;
-            this.camera.setFreeCamTarget(miniMapTarget.x, miniMapTarget.y);
-            return;
-          }
           this.hud.handlePointerDown(e.clientX, e.clientY);
         }
       },
@@ -302,11 +290,8 @@ export class Game {
     // 6. 初始化形狀生態至 500 個
     this.shapeSystem.fillToTarget();
 
-    // 7. 若為開發環境，動態載入 DebugOverlay
-    if (import.meta.env.DEV) {
-      const { DebugOverlay } = await import('../debug/DebugOverlay');
-      this.devOverlay = new DebugOverlay(this);
-    }
+    // 7. 正式玩家版：完全禁用 DebugOverlay
+    this.devOverlay = null;
 
     // 8. 標記完成初始化並啟動主循環
     this.isInitialized = true;
@@ -528,25 +513,19 @@ export class Game {
   }
 
   public toggleGodView(): void {
-    this.camera.isGodView = !this.camera.isGodView;
-    if (this.camera.isGodView) {
-      this.camera.isFreeCam = false;
-      this.camera.spectateTarget = null;
-      this.showAiDevLabels = true;
-    }
+    // 正式玩家版：完全禁用上帝全圖視角
+    this.camera.isGodView = false;
+    this.showAiDevLabels = false;
   }
 
   public toggleFreeCam(): void {
-    this.camera.isFreeCam = !this.camera.isFreeCam;
-    if (this.camera.isFreeCam) {
-      this.camera.isGodView = false;
-      this.camera.spectateTarget = null;
-      this.camera.setFreeCamTarget(this.camera.x, this.camera.y);
-    }
+    // 正式玩家版：完全禁用自由相機
+    this.camera.isFreeCam = false;
   }
 
   public toggleAiGizmos(): void {
-    this.showAiGizmos = !this.showAiGizmos;
+    // 正式玩家版：完全禁用 AI 決策輔助線可視化
+    this.showAiGizmos = false;
   }
 
   public resetCamera(): void {
@@ -579,9 +558,7 @@ export class Game {
     recomputeDerivedStats(this.playerTank);
     this.eventBus.emitClassChanged(this.playerTank.id, 'basic');
 
-    this.playerTank.isGodMode = this.devOverlay
-      ? this.devOverlay.isGodMode
-      : true;
+    this.playerTank.isGodMode = false; // 正式玩家版：重生後無敵模式關閉
     this.playerTank.invulnerableTicks = SPAWN_INVULNERABLE_TICKS; // 75 ticks (3 秒無敵)
     this.camera.spectateTarget = null;
     this.camera.teleport(safePos.x, safePos.y);
