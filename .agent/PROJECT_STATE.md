@@ -1,7 +1,7 @@
-# PROJECT_STATE.md - 專案狀態快照與交接備忘 (M1 ~ M7 完工)
+# PROJECT_STATE.md - 專案狀態快照與交接備忘 (M1 ~ M9 完工 & 正式玩家版交付)
 
-> **建立時間**：2026-11-11  
-> **當前狀態**：**M1 至 M7 核心里程碑已全數通過實機自主驗收**。全遊戲 21 款坦克（Tier 1~4）全數實裝、拓撲樹完整、等級系統解鎖至 Lv 45（33 技能點）、子彈渲染器升級為四階超取樣貼圖嚴守紅線 2（3.0px 描邊恆定律）。27 個測試檔案、134 個單元測試 100% 通過。  
+> **更新時間**：2026-11-12  
+> **當前狀態**：**M1 至 M9 核心里程碑已全數通過實機自主驗收**，並已建立純淨無外掛正式玩家版分支（`release/player-edition`）。全遊戲 21 款坦克（Tier 1~4）全數實裝、拓撲樹完整、等級系統解鎖至 Lv 45（33 技能點）、M8 子彈相消物理、M9 4 大 AI 人設（Newbie/Aggressor/Tactician/Apex）、動態速度前瞻側向切線避障、弱肉強食實力差距威懾主動避退。36 個測試檔案、202 個單元測試 100% 通過。  
 > **適用對象**：接續開發新對話視窗的 AI Agent 或工程師，可直接基於本文件銜接後續擴充工作。
 
 ---
@@ -20,11 +20,26 @@
   - `largeTexture` ($r=72$)：對應 Destroyer ($14.0 \le r < 21.0$)。
   - `hugeTexture` ($r=96$)：對應 Annihilator ($r \ge 21.0$)。
   - 配合動態 `baseScale` 恆定繪製為 3.0px 邊框，嚴格遵守【紅線 2】。
+- **M8 子彈相消與 5 向量混合架構**：
+  - 自研子彈對撞動量守恆扣血與碰撞折射，並噴濺粒子火花（零 GC 池化）。
+  - CPA 最短交會時間預判（`AI_MAX_CPA_TICKS = 28`），正向夾角 $\pm 0.62\text{ rad}$ 巨彈主動攔截鎖定（`AI_INTERCEPT_LOCK_TICKS = 4`）。
+  - 5 股力場連續合成（戰鬥、撤退、農怪、避彈、邊界），逃跑遇邊界時轉化為沿切線方向滑動（`Wall-Corner Tangent Sliding`），杜絕死角定格。
+- **M9 擬人化 AI 人設與生態系深化**：
+  - 4 大 AI 人設（Newbie 薄荷綠、Aggressor 珊瑚紅、Tactician 薰衣草紫、Apex 金橙色），支援種子 PRNG（Mulberry32）確定性復現。
+  - 速度前瞻動態避障（`AI_SHAPE_LOOKAHEAD_TICKS = 10`）與側向切線繞行偏轉力（`AI_SHAPE_TANGENT_FORCE = 3.6`），逃跑正對形狀時將後撤力偏轉為切線繞行，徹底杜絕自撞扣血。
+  - 實時綜合戰鬥力指標與弱肉強食實力差距威懾主動避退（`AI_INTIMIDATION_POWER_DIFF_THRESHOLD = 15.0`），弱小 AI 即使 100% 滿血亦會及時逃離強大掠食者。
+  - 脫離視野後強制維持 75 ticks（3.0 秒）定向逃逸，安靜趕路加速回血，消除邊緣回頭送死的抽搐問題。
+  - 無頭自對弈演化訓練器（Stage A 微觀決鬥 + Stage B 宏觀混戰 2,000 ticks），適應度匯出至 `reports/m9-epoch-summary.json`。
+- **正式玩家發布版 (`release/player-edition`)**：
+  - 徹底卸載 `DebugOverlay` 與按鍵監聽。
+  - 視角 100% 平滑鎖定玩家本體，禁用自由相機與小地圖跳轉。
+  - 玩家關閉開局無敵（`isGodMode = false`），真實承受傷害，正常死亡結算並以 3 秒護盾重生。
+  - AI 預設對玩家開啟敵意（`ignorePlayer = false`），提供完整 PvP/PvE 遊戲體驗。
 - **熱路徑零垃圾收集 (Zero-GC)**：
   - 模擬與渲染迴圈嚴禁 `new` 物件、閉包與陣列解構。
   - 500+ 形狀、600+ 子彈與 1024 粒子全面池化（`ObjectPool`）。
   - 碰撞粗篩採用基於 `Int32Array` 的空間雜湊（`SpatialHash`）。
-- **品質防線**：27 個測試檔案、134 個 Vitest 單元測試 100% 通過，Biome Linter 0 錯誤，正式建置（`npm run build`）完全 Tree-shaking 剔除 `DebugOverlay`。
+- **品質防線**：36 個測試檔案、202 個 Vitest 單元測試 100% 通過，Biome Linter 0 錯誤。
 
 ---
 
@@ -123,6 +138,20 @@ Basic Tank ──────┤                    └─ Hunter ────�
 | `src/config/constants.ts:211` | `SHAPE_BASE_DRIFT` | `0.25` | 幾何形狀漫遊速度上限 | 決定野外刷怪場的動態漂移活躍度 |
 | `src/config/constants.ts:230` | `HEALTHBAR_OFFSET_FACTOR`| `1.6` | 動態血條相對於實體底緣的垂直偏移倍率 | 確保血條不與坦克底座或多邊形重疊 |
 | `src/config/constants.ts:236` | `HEALTHBAR_WIDTH_FACTOR` | `1.4` | 動態血條寬度相對於半徑的縮放比例 | 隨實體大小等比例寬縮 |
+| `src/config/constants.ts:322` | `AI_BULLET_SCAN_RADIUS` | `550` | AI 子彈威脅偵測感知半徑 (世界單位) | 隨相機視野擴大同步提升，避免被螢幕外冷槍擊中 |
+| `src/config/constants.ts:325` | `AI_MAX_CPA_TICKS` | `28` | AI CPA 最接近時間上限 (ticks) | 超過此時間之子彈視為遠程無威脅，消除無效躲避 |
+| `src/config/constants.ts:328` | `AI_INTERCEPT_LOCK_TICKS`| `4` | AI 巨彈主動攔截鎖定維持時間 (ticks) | 快速點射抵消後立即回歸瞄準敵方坦克 |
+| `src/config/constants.ts:331` | `AI_INTERCEPT_MAX_ANGLE` | `0.62` | 觸發攔截的正前方最大夾角 (rad，約 35.5 度) | 側翼流彈禁止轉動砲管，僅靠身法閃避 |
+| `src/config/constants.ts:339` | `AI_INTERCEPT_MIN_BULLET_RADIUS` | `18` | 允許 AI 轉動砲管攔截之最低子彈半徑 (單位) | 僅限 Destroyer / Annihilator 等致命巨砲彈 |
+| `src/config/constants.ts:345` | `AI_RETREAT_HP_ENTER` | `0.45` | 進入殘血逃跑 (Retreat) 狀態之生命比例門檻 | 低於 45% 觸發逃跑 |
+| `src/config/constants.ts:351` | `AI_RETREAT_HP_EXIT` | `0.70` | 脫離殘血逃跑之生命比例門檻 | 雙門檻遲滯防抽搐，需回血至 70% 才重返交火 |
+| `src/config/constants.ts:357` | `AI_RETREAT_FORCE_MULTIPLIER` | `2.2` | 殘血逃跑後撤力場強度倍率 | 壓倒性遠離威脅點 |
+| `src/config/constants.ts:363` | `AI_SHAPE_AVOID_DISTANCE`| `55` | 幾何形狀主動避障警戒邊界淨距 (世界單位) | 進入此淨距時觸發避障排斥力 |
+| `src/config/constants.ts:369` | `AI_SHAPE_AVOID_FORCE` | `2.4` | 幾何形狀避障排斥力場強度倍率 | 防止交火走位撞怪自殘 |
+| `src/config/constants.ts:375` | `AI_SHAPE_LOOKAHEAD_TICKS` | `10` | 高速避障速度動態前瞻 ticks (約 0.4 秒) | 提前偵測前進路徑上的幾何形狀，預留減速與轉彎距離 |
+| `src/config/constants.ts:381` | `AI_SHAPE_TANGENT_FORCE` | `3.6` | 正前方幾何形狀側向切線繞行偏轉力倍率 | 將直衝障礙的撞擊力轉化為弧形滑動繞行動能 |
+| `src/config/constants.ts:388` | `AI_ESCAPE_MAINTAIN_TICKS`| `75` | 脫離敵人視野後強制維持定向逃逸時間 (3 秒) | 建立安全逃逸緩衝區，杜絕在視野邊緣掉頭回跑送死 |
+| `src/config/constants.ts:395` | `AI_INTIMIDATION_POWER_DIFF_THRESHOLD` | `15.0` | 弱肉強食實力差距威懾主動逃逸門檻 | (敵戰力 - 己戰力) * 人設敏感度 >= 15 時滿血亦避退 |
 
 ---
 

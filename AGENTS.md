@@ -1,6 +1,6 @@
 # AGENTS.md - 開發智能體與工程協作規範 (diep-rework)
 
-> **專案階段**：**M1 ~ M6 核心里程碑全數完工**（進入後續擴充、數值調校與維護階段）。
+> **專案階段**：**M1 ~ M9 核心里程碑全數完工**，已建立純淨正式玩家發布版分支（`release/player-edition`）。
 > 本文件是所有參與 `diep-rework` 開發的 AI 智能體（Agent）與開發者必須嚴格遵守的架構規範、程式碼標準、模組索引與實戰避坑紅線。
 
 ---
@@ -13,18 +13,19 @@
 - [`src/core/Game.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/Game.ts)：遊戲主中樞，組裝系統、管理主循環推進順序、輸入分發與每幀渲染管線。
 - [`src/core/GameLoop.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/GameLoop.ts)：`requestAnimationFrame` 迴圈封裝，計算真實幀間隔 $\Delta t$ 並傳遞給步進器。
 - [`src/core/FixedStepper.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/FixedStepper.ts)：固定步長模擬器（`SIM_TICK_RATE = 25` TPS），累積時間並輸出整數 ticks 與插值係數 `alpha`。
-- [`src/core/Camera.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/Camera.ts)：世界相機，處理目標插值平移、動態 FOV 縮放、視窗變換矩陣與視錐範圍計算。
+- [`src/core/Camera.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/Camera.ts)：世界相機，處理目標插值平移、動態 FOV 縮放、視窗變換矩陣、視錐計算與自由相機。
 - [`src/core/InputManager.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/InputManager.ts)：玩家鍵鼠監聽（`KeyboardEvent.code`），封裝防卡鍵機制並輸出標準 `InputCommand`。
 - [`src/core/EventBus.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/EventBus.ts)：全域扁平事件匯流排，解耦物理、戰鬥、AI 與 HUD，支援零 GC 傳參。
 - [`src/core/ObjectPool.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/ObjectPool.ts)：通用高效物件池，以 $O(1)$ 進行 `acquire()` 與 `release()`，杜絕熱路徑 GC。
 - [`src/core/deriveStats.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/deriveStats.ts)：依據坦克等級與 8 項屬性加點計算實時戰鬥數值（血量、速度、裝填、傷害等）。
+- [`src/core/rng.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/core/rng.ts)：Mulberry32 偽隨機數產生器 (PRNG)，支援種子注入以實現 100% 確定性無頭訓練。
 
 ### 物理與空間分割 (`src/physics/`)
 - [`src/physics/PhysicsWorld.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/physics/PhysicsWorld.ts)：自研 2D 圓形物理世界（加速度、每 tick 阻尼減速、速度積分、世界邊界夾取與彈性）。
 - [`src/physics/SpatialHash.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/physics/SpatialHash.ts)：基於扁平 `Int32Array`（網格 head 與實體 next）的高效空間雜湊，提供 $O(1)$ 碰撞候選查詢。
 
 ### 遊戲邏輯系統處理器 (`src/systems/`)
-- [`src/systems/CollisionSystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/systems/CollisionSystem.ts)：窄相位圓形碰撞、高速子彈掃掠防穿透（Swept CCD）、撞擊推開衝量與每 tick 扣血結算。
+- [`src/systems/CollisionSystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/systems/CollisionSystem.ts)：窄相位圓形碰撞、高速子彈掃掠防穿透（Swept CCD）、M8 子彈互相相消偏轉、撞擊衝量與每 tick 扣血。
 - [`src/systems/FireSystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/systems/FireSystem.ts)：砲管冷卻計時、多砲管交替/同步開火、後座力衝量注入、口徑半徑對齊與子彈生成。
 - [`src/systems/LevelingSystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/systems/LevelingSystem.ts)：經驗分數結算、等級提升、升級點數發放、轉職條件檢測與跨級連升觸發。
 - [`src/systems/RegenSystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/systems/RegenSystem.ts)：坦克生命自然恢復與 30 秒無傷觸發的 Hyper-Regen 急速回血處理。
@@ -32,12 +33,14 @@
 - [`src/systems/SpawnSystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/systems/SpawnSystem.ts)：管理玩家與 AI 重生機制（折半等級重生、最大最小距離全圖分散選點、無敵護盾）。
 
 ### 人工智慧決策機器人 (`src/ai/`)
-- [`src/ai/AISystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ai/AISystem.ts)：AI 核心決策有限狀態機（打怪、戰鬥、撤退、遊蕩），包含雙門檻遲滯、角速度轉向平滑與邊退邊打。
+- [`src/ai/AISystem.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ai/AISystem.ts)：AI 核心決策有限狀態機（打怪、戰鬥、撤退、遊蕩），整合 M8 CPA 彈幕攔截、M9 四大人設、切線避障與弱肉強食戰力差威懾逃退。
+- [`src/ai/aiPersonas.config.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ai/aiPersonas.config.ts)：4 大 AI 人設（Newbie、Aggressor、Tactician、Apex）定義、代表色（`PERSONA_COLORS`）與性格參數。
+- [`src/ai/aiGenome.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ai/aiGenome.ts)：可訓練戰術基因組架構，包含 5 向量權重、撤退曲線、目標切換慣性與突變算子。
 - [`src/ai/aiTactics.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ai/aiTactics.ts)：各職業專屬戰術配置（狙擊風箏距離、衝鋒壓制、預判引導射擊權重）。
 - [`src/ai/botNames.config.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ai/botNames.config.ts)：原汁原味 diep.io 風格的 100+ 機器人名冊。
 
 ### 扁平數據模型 (`src/entities/`)
-- [`src/entities/Tank.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/entities/Tank.ts)：坦克扁平數據模型（座標、速度、插值前座標、角度、生命、等級、職業定義、輸入指令）。
+- [`src/entities/Tank.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/entities/Tank.ts)：坦克扁平數據模型（座標、速度、插值前座標、角度、生命、等級、職業定義、輸入指令、人設標記）。
 - [`src/entities/Bullet.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/entities/Bullet.ts)：子彈實體（位置、速度、傷害、耐久血量、半徑、壽命 ticks、顏色、平滑漸逝進度）。
 - [`src/entities/Shape.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/entities/Shape.ts)：幾何形狀實體（多邊形種類、生命值、碰撞傷害、質量、旋轉角與經驗值）。
 - [`src/entities/Particle.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/entities/Particle.ts)：粒子實體（爆破飛濺殘片、顏色、縮放衰減與壽命倒數）。
@@ -46,11 +49,12 @@
 - [`src/rendering/Renderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/Renderer.ts)：Pixi.js v8 Application 初始化，管理 `WorldContainer` 與 `HUDContainer` 視窗縮放。
 - [`src/rendering/TankRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/TankRenderer.ts)：單體坦克視覺繪製（圓形底座、單管/多管幾何、外擴喇叭口、砲管射擊後座力縮放）。
 - [`src/rendering/MultiTankRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/MultiTankRenderer.ts)：多坦克管理池渲染器，支援玩家與所有 AI 坦克平滑轉向插值（`lerpAngle`）與名稱顯示。
-- [`src/rendering/BulletRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/BulletRenderer.ts)：雙規格超取樣共用貼圖（Normal / Destroyer）Sprite 池，確保任何半徑下邊框恆定 3.0px 且零模糊。
+- [`src/rendering/BulletRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/BulletRenderer.ts)：四規格超取樣共用貼圖（Small / Normal / Large / Huge）Sprite 池，確保任何半徑下邊框恆定 3.0px 且零模糊。
 - [`src/rendering/ShapeRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/ShapeRenderer.ts)：幾何多邊形預烘培共用貼圖 Sprite 池渲染器，支援自轉動畫與邊界剔除。
-- [`src/rendering/ParticleRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/ParticleRenderer.ts)：爆炸粒子 Sprite 池渲染器。
+- [`src/rendering/ParticleRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/ParticleRenderer.ts)：爆炸與子彈碰撞火花粒子 Sprite 池渲染器。
 - [`src/rendering/HealthBarRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/HealthBarRenderer.ts)：世界層動態血條，掛載於 `WorldContainer` 並與實體共用插值座標，杜絕抖動。
 - [`src/rendering/GridRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/GridRenderer.ts)：背景網格貼圖層與地圖邊界深灰色陰影表現。
+- [`src/rendering/AiGizmoRenderer.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/AiGizmoRenderer.ts)：調試專用 AI 視野圓環、目標鎖定紅線與前進走位綠線視覺化。
 - [`src/rendering/culling.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/culling.ts)：手動視錐剔除純函式 `isInBounds`，安全取代 Pixi 內建 Culler。
 - [`src/rendering/getRenderPosition.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/rendering/getRenderPosition.ts)：零配置插值座標計算器 `(prev + (cur - prev) * alpha)`。
 
@@ -63,22 +67,24 @@
 - [`src/ui/EvolutionPanel.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ui/EvolutionPanel.ts)：左上角轉職卡牌 Deck（動態自轉 3D 預覽卡牌、`Ignore` 灰色長方按鈕與靠近展開）。
 - [`src/ui/GameOverModal.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ui/GameOverModal.ts)：死亡結算彈窗（擊殺者、得分、存活時間、擊殺數、一鍵重生按鈕與 Enter 鍵綁定）。
 - [`src/ui/KillToast.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ui/KillToast.ts)：擊殺敵方坦克時的漂浮擊殺通知。
+- [`src/ui/FreeCamBanner.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/ui/FreeCamBanner.ts)：自由相機頂部提示橫幅與一鍵退出按鈕（僅在開發與自由相機啟動時渲染）。
 
 ### 遊戲數值設定 (`src/config/`)
-- [`src/config/constants.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/config/constants.ts)：時鐘真值（`SIM_TICK_RATE = 25`）、物理參數、渲染尺度與 `TODO(tune)` 可調常數。
-- [`src/config/levels.config.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/config/levels.config.ts)：原版 Lv 1 ~ Lv 30 經驗升級查表與技能點數發放邏輯。
+- [`src/config/constants.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/config/constants.ts)：時鐘真值（`SIM_TICK_RATE = 25`）、物理參數、渲染尺度、M8 子彈相消係數、M9 避障前瞻與 `TODO(tune)` 可調常數。
+- [`src/config/levels.config.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/config/levels.config.ts)：原版 Lv 1 ~ Lv 45 經驗升級查表與 33 點技能發放邏輯。
 - [`src/config/stats.config.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/config/stats.config.ts)：原版 8 項屬性加點非線性換算公式與等級尺寸成長係數。
-- [`src/config/tanks.config.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/config/tanks.config.ts)：9 款坦克職業定義、轉職拓撲樹、砲管配置、射速、散射與後座力。
+- [`src/config/tanks.config.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/config/tanks.config.ts)：全遊戲 21 款坦克職業定義 (Tier 1~4)、轉職拓撲樹、砲管配置、射速、散射與後座力。
 
 ### 除錯與沙盒工具 (`src/debug/`)
-- [`src/debug/DebugOverlay.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/debug/DebugOverlay.ts)：僅在 `DEV` 載入的除錯面板（按 `` ` `` 鍵切換），支援即時性能監控、一鍵加分/升級/轉職、上帝視角、無敵模式、生成 AI 與 600 子彈壓力測試。
+- [`src/debug/DebugOverlay.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/debug/DebugOverlay.ts)：僅在 `DEV` 載入的除錯面板（按 `` ` `` 鍵切換），支援即時性能監控、一鍵加分/升級/轉職、自由相機、無敵模式、生成 AI、決鬥沙盒與壓力測試。
+- [`src/debug/AgentTestInterface.ts`](file:///c:/Users/weiqi/Projects/diep-rework/src/debug/AgentTestInterface.ts)：供 Agent 與除錯面板使用的自動化測試靶機與 AI vs AI 雙人決鬥沙盒驅動介面。
 
 ---
 
 ## 2. 核心原則 (Golden Rules)
 
 1. **里程碑紀律與維護規範 (Milestone & Maintenance Discipline)**：
-   - 專案已通過 M1 ~ M6 驗收，後續新功能、擴充與維護仍須維持高標準：變更前先釐清範疇、新增對應單元測試、實機驗證。
+   - 專案已通過 M1 ~ M9 核心里程碑驗收，並建立正式玩家版分支（`release/player-edition`）。後續新功能、擴充與維護仍須維持高標準：變更前先釐清範疇、新增對應單元測試、實機驗證。
    - **收尾執行 `/verify-milestone`**：每次重大里程碑或版本發布結尾必須執行驗收流程，依其步驟進行完整自動檢查、熱路徑掃描、browsermcp 瀏覽器操作與視覺驗收、驗收清單核對與 commit 規範檢查，並回報給使用者。
 2. **零程式碼確認期 (Plan-First Rule)**：
    - 未獲使用者明確「確認開始實作」指令前，不得生成或修改任何專案程式碼檔案。
@@ -87,7 +93,7 @@
 4. **原版數值與時鐘單一真值 (Authentic Stats & Single Clock Source)**：
    - 所有遊戲數值與公式以原版 diep.io（`diepio.fandom.com/wiki/Stats` 等）為準。已查證數值寫入 `src/config/` 並**在註解中註明實際開啟驗證過的來源 URL 與原文**；查不到的數值必須在 `src/config/constants.ts` 設為具名常數並標註 `TODO(tune)`（註明「未查證」），透過 `DebugOverlay` 提供即時調整，**嚴禁無標記地自行編造數值**。
    - 固定步長模擬頻率（25 ticks/秒）只定義在 `src/config/constants.ts` 的單一常數 `SIM_TICK_RATE = 25`，所有以 tick 為單位的數值皆由它換算，**禁止硬編碼 `0.04`**。
-   - 職業階層命名統一採用原版：**Tier 1 (Lv 1)**、**Tier 2 (Lv 15)**、**Tier 3 (Lv 30)**，型別固定為 `tier: 1 | 2 | 3`，禁止出現「一階／二階／三階」混用。
+   - 職業階層命名統一採用原版：**Tier 1 (Lv 1)**、**Tier 2 (Lv 15)**、**Tier 3 (Lv 30)**、**Tier 4 (Lv 45)**，型別固定為 `tier: 1 | 2 | 3 | 4`，禁止出現「一階／二階／三階／四階」混用。
 5. **世界尺度基準 (World Coordinate Scale)**：
    - 嚴格對齊原版尺度：**1 背景格 = 25 世界單位**、**Lv 1 坦克半徑 = 25 世界單位**（直徑 50 單位 = 2 格寬）。
    - 畫面顯示縮放全由 `Camera` 的 `CAMERA_BASE_SCALE * fovMultiplier` 控制，世界座標不放大，所有速度與物理運算一律以「**世界單位 / tick**」進行。
@@ -216,6 +222,33 @@
     - **避坑規範**：所有數值以原版 diep.io 為準。未查證項目必須在 `src/config/constants.ts` 設為具名常數並標註 `TODO(tune)`（註明「未查證」）；`stress.test.ts` 僅驗證零崩潰與輸出基準數據，禁止設定硬性毫秒斷言。
 14. **【紅線 14】Windows PowerShell 語法與多行 Commit 提交規範**：
     - **避坑規範**：Windows PowerShell 5.1 不支援 `&&` 指令串接符號，一律改用 `;` 或分行執行；多行 commit 訊息必須寫入暫存檔後以 `git commit -F <file>` 提交。
+
+### F. M8/M9 子彈相消、AI 決策深化與正式發布版紅線 (M8/M9 Deepening & Release Guardrails)
+
+15. **【紅線 15】子彈相消動量守恆與視錐攔截約束（Bullet Clashing & Interception Cone - M8 凍結紅線）**：
+    - **踩坑歷史**（M8 Commit `e8b150c`）：初期 AI 只要感知到任何來襲流彈即強制擺動砲管嘗試抵消，導致面對多管散彈時砲口劇烈抽搐、完全無法瞄準敵方坦克本體。
+    - **避坑規範**：
+      - 普通子彈（`radius < 18`）100% 依靠側身橫移（`evadeX/evadeY`）閃身規避，砲管維持鎖定敵方坦克。
+      - 僅當偵測到巨型致命重砲彈（`radius >= 18`，如 Destroyer/Annihilator）且彈道落於正前方最大夾角 $\pm 0.62\text{ rad}$（約 35.5 度）視錐內時，才允許觸發短暫攔截鎖定（`AI_INTERCEPT_LOCK_TICKS = 4`），快速點射相消後立即回歸對人。
+16. **【紅線 16】防牆角力場抵消死鎖與障礙切線滑動（Wall-Corner & Obstacle Tangent Sliding - M8/M9 凍結紅線）**：
+    - **踩坑歷史**（M8 Commit `78edece` & M9 Commit `cb0ea69`）：撤退力場（$5.94\times$）與地圖邊界或幾何形狀排斥力反向對沖時，向量直接抵消為 0，導致坦克被逼至死角原地定格受死；逃跑時也常因大馬力後撤正對五邊形而自撞扣血。
+    - **避坑規範**：
+      - 當後撤向量與邊界排斥向量劇烈對立（$\text{dot} < -0.5$）或與障礙避障向量對立（$\text{dot} < -0.2$）時，**嚴禁硬撼對撞**，必須將後撤力投影偏轉為沿邊界或障礙物之**切線向量**滑動繞行，並依 `aiStrafeDirection` 保持時間連續性。
+17. **【紅線 17】AI 人設瞄準隨機誤差取樣維持（Aim Noise Sample-Holding - M9 凍結紅線）**：
+    - **踩坑歷史**（M9 Commit `2cf44c0`）：若每 tick 隨機抽樣高斯雜訊並疊加至瞄準角度，會導致砲管呈現高頻微顫（Micro-jitter），視覺嚴重破圖且失去擬人真實感。
+    - **避坑規範**：瞄準角雜訊偏移（`aiNoiseOffset`）嚴格僅在決策刷新週期（2~8 ticks，依人設 `reactionIntervalTicks`）或切換目標時抽樣一次並保持穩定，其餘時間砲管旋轉平滑過渡，嚴禁每 tick 重抽樣。
+18. **【紅線 18】定向逃逸時間維持緩衝（Escape Heading Stabilization 75 Ticks - M9 凍結紅線）**：
+    - **踩坑歷史**（M9 Commit `cb0ea69`）：AI 逃跑時一旦敵人剛脫離視野邊緣（`PERCEPTION_RADIUS`），狀態機立即跳回 `farming`，導致 AI 掉頭回跑送死，反覆抽搐。
+    - **避坑規範**：敵人脫離視野後，AI 必須強制維持 75 ticks（3.0 秒，`AI_ESCAPE_MAINTAIN_TICKS`）定向逃逸，並安靜趕路（`shooting = false`）加速自然回血，建立安全距離緩衝區後才安全回歸農怪。
+19. **【紅線 19】弱肉強食實力差距威懾逃退（Combat Power Disparity Intimidation Retreat - M9 凍結紅線）**：
+    - **踩坑歷史**（M9 Commit `bd79ebc`）：滿血低階/低等級 AI（如 Lv 1 Basic Tank）遭遇高階霸主（如 Lv 30 Destroyer）時，因自身血量 100% 而判定為 `engaging`，迎面送頭被一砲秒殺。
+    - **避坑規範**：實時計算綜合戰鬥力 $P = \text{level} \times 1.0 + (\text{tier} - 1) \times 8.0 + \frac{\text{hp}}{\text{maxHp}} \times 6.0$。當 $(\Delta P \times \text{persona.intimidationSensitivity}) \ge \text{AI\_INTIMIDATION\_POWER\_DIFF\_THRESHOLD}$（$15.0$）時，弱小 AI 即使 100% 滿血亦必須立即主動避退，進入 `retreating` 狀態。
+20. **【紅線 20】正式玩家發布版純淨隔離規範 (Player Release Edition Isolation)**：
+    - **發布分支約束**：`release/player-edition` 分支作為終端玩家版本，必須嚴格隔離所有開發與測試工具：
+      - `this.devOverlay = null`，完全不載入 `DebugOverlay`，按鍵 `` ` `` 與 `/` 禁用。
+      - `isFreeCam = false`，解綁 `KeyC` 自由相機，禁用小地圖點擊跳轉，不渲染 `FreeCamBanner`。
+      - 玩家開局與重生後預設 `isGodMode = false`，真實承受傷害與死亡，僅享有原版 3 秒 `invulnerableTicks` 護盾。
+      - AI 決策預設 `ignorePlayer = false`，將玩家視為正式敵對目標展開真實攻防。
 
 ---
 
